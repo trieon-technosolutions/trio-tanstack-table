@@ -1,0 +1,100 @@
+.resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 8px;
+  background-color: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 30;
+  user-select: none;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background-color: #d9d9d9;
+  transition:
+    width 160ms ease,
+    background-color 160ms ease;
+}
+
+.resizer:hover {
+  background-color: transparent;
+}
+
+.resizer:hover::after {
+  width: 3px;
+  background-color: #8c8c8c;
+}
+
+.resizer.isResizing {
+  background-color: transparent;
+}
+
+.resizer.isResizing::after {
+  width: 3px;
+  background-color: #595959;
+}
+
+/* Optimize paint operations */
+.table-wrapper {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000;
+  contain: content;
+}
+
+/* Optional: Add this to your table wrapper to prevent horizontal scroll jump during resize */
+.table-container {
+  overflow-x: clip;
+  width: 100%;
+}
+
+.ant-form-item {
+  margin-bottom: 0px !important;
+}
+
+.rhf-card {
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 6px;
+  background: #fff;
+}
+
+.rhf-card-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.rhf-card-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.rhf-card-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+/* GroupBy popover available-column row hover */
+.group-by-available-row:hover {
+  background-color: #f5f5f5;
+}
