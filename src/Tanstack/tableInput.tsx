@@ -5,9 +5,9 @@ import {
   ProFormRadio,
   ProFormRadioGroupProps,
   ProFormText,
-} from "@ant-design/pro-components"
-import { InputProps } from "antd"
-import React from "react"
+} from "@ant-design/pro-components";
+import { InputProps } from "antd";
+import React from "react";
 import {
   PreInputFormField,
   ProAmount,
@@ -15,15 +15,15 @@ import {
   ProDateRangePicker,
   ProSelect,
   ProSelectProps,
-} from "../ProComponents"
+} from "../ProComponents";
 
-import { DatePickerProps } from "antd/lib"
-import { RangePickerProps } from "antd/lib/date-picker"
-import { WEIGHT_INPUT_PRECISION } from "~/form-constants"
-import { OPTIONS_FOR_NUMERIC_QUANTITY } from "./tableConstant"
+import { DatePickerProps } from "antd/lib";
+import { RangePickerProps } from "antd/lib/date-picker";
+import { WEIGHT_INPUT_PRECISION } from "~/form-constants";
+import { OPTIONS_FOR_NUMERIC_QUANTITY } from "./tableConstant";
 
 // NOTE: Defining the combined props type for the custom input component
-export type BaseInputProps = InputProps & ProFormDigitProps & ProSelectProps
+export type BaseInputProps = InputProps & ProFormDigitProps & ProSelectProps;
 
 export type TableInputFieldTypes =
   | "select"
@@ -59,10 +59,10 @@ export type TableInputFieldTypes =
   | "checkbox"
   | "modal-table-select"
   | "nestedEditableTable"
-  | "serial-number-select"
+  | "serial-number-select";
 
 export interface TableInputProps extends BaseInputProps {
-  type?: TableInputFieldTypes | string
+  type?: TableInputFieldTypes | string;
 }
 
 // NOTE: Functional component for the custom input element
@@ -82,7 +82,7 @@ export const TableInput: React.FC<TableInputProps> = ({
           }}
           style={{ width: "100%", ...rest?.style }}
         />
-      )
+      );
     case "select":
       return (
         <ProSelect
@@ -95,8 +95,9 @@ export const TableInput: React.FC<TableInputProps> = ({
           isFullWidth
           {...(rest as ProSelectProps)}
         />
-      )
+      );
     case "multi-select":
+      console.log("rest ", rest);
       return (
         <ProSelect
           mode="multiple"
@@ -109,9 +110,9 @@ export const TableInput: React.FC<TableInputProps> = ({
           isFullWidth
           {...(rest as ProSelectProps)}
         />
-      )
+      );
     case "amount":
-      return <ProAmount {...(rest as ProFormDigitProps)} noStyle={false} />
+      return <ProAmount {...(rest as ProFormDigitProps)} noStyle={false} />;
     case "quantity":
       return (
         <ProFormDigit
@@ -122,7 +123,7 @@ export const TableInput: React.FC<TableInputProps> = ({
           }}
           style={{ width: "100%", ...rest?.style }}
         />
-      )
+      );
     case "date":
       return (
         <ProDatePicker
@@ -133,7 +134,7 @@ export const TableInput: React.FC<TableInputProps> = ({
             ...(rest.fieldProps as ProFormItemProps<DatePickerProps>["fieldProps"]),
           }}
         />
-      )
+      );
 
     case "date-range":
       return (
@@ -144,7 +145,7 @@ export const TableInput: React.FC<TableInputProps> = ({
             ...(rest.fieldProps as ProFormItemProps<RangePickerProps>["fieldProps"]),
           }}
         />
-      )
+      );
     case "radio":
       return (
         <ProFormRadio.Group
@@ -154,12 +155,12 @@ export const TableInput: React.FC<TableInputProps> = ({
             style: { width: "100%" },
           }}
         />
-      )
+      );
 
     default:
       return (
         // NOTE: Default Input component with themed styles
         <ProFormText {...(rest as ProFormItemProps)} />
-      )
+      );
   }
-}
+};

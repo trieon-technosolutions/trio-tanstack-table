@@ -1,6 +1,6 @@
 /* eslint-disable no-unsafe-optional-chaining */
 /* eslint-disable react/display-name */
-import { ReloadOutlined } from "@ant-design/icons"
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -22,15 +22,15 @@ import {
   Table,
   useReactTable,
   VisibilityState,
-} from "@tanstack/react-table"
+} from "@tanstack/react-table";
 import {
   useInfiniteScroll,
   useRequest,
   useSafeState,
   useUpdateEffect,
-} from "ahooks"
-import dayjs from "dayjs"
-import isBetween from "dayjs/plugin/isBetween"
+} from "ahooks";
+import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
 import React, {
   ForwardedRef,
   forwardRef,
@@ -39,54 +39,56 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react"
+} from "react";
 import {
-  SavedViewsControl,
   ServerExportButton,
   ServerExportPayload,
   TableViewState,
-} from "~/shared/components/SavedViews"
-import { useAppTheme } from "~/theme"
-import type { UrlFilterValue } from "./filter-url-utils"
-import { GroupByDropDown } from "./GroupByDropDown"
-import { InternalTable } from "./InternalTable"
+} from "~/shared/components/SavedViews";
+import { LocalSavedViews } from "./LocalSavedViews";
+import { useTableConfigSafe } from "~/lib/TableConfigProvider";
+import { useAppTheme } from "~/theme";
+import type { UrlFilterValue } from "./filter-url-utils";
+import { GroupByDropDown } from "./GroupByDropDown";
+import { InternalTable } from "./InternalTable";
+import { Export, TableAction } from "./TableAction";
 import {
   CustomTableMeta,
   PaginationState,
   RequestResponse,
   TableRef,
   TanstackTableProps,
-} from "./table.types"
+} from "./table.types";
 import {
   ColumnDropDown,
   TanstackFilter,
   TanstackTableCount,
   TanstackTablePagination,
   TanstackToolbar,
-} from "./tableComponents"
+} from "./tableComponents";
 import {
   getExtraColumns,
   getHiddenColumns,
   getRowIds,
   getSelectedRowModel,
-} from "./tableUtils"
-import { useTableUrlSync } from "./useTableUrlSync"
-import { useTanstackTable } from "./useTanstackTable"
+} from "./tableUtils";
+import { useTableUrlSync } from "./useTableUrlSync";
+import { useTanstackTable } from "./useTanstackTable";
 
-import { debounce, isArray } from "lodash"
+import { debounce, isArray } from "lodash";
 
-dayjs.extend(isBetween)
+dayjs.extend(isBetween);
 
-const DEFAULT_LEFT_PINNED_COLUMNS = ["rowSelection", "index"] as const
-const DEFAULT_RIGHT_PINNED_COLUMNS = ["filter"] as const
+const DEFAULT_LEFT_PINNED_COLUMNS = ["rowSelection", "index"] as const;
+const DEFAULT_RIGHT_PINNED_COLUMNS = ["filter"] as const;
 
 const toStringArray = (value: unknown): string[] => {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
-    : []
-}
+    : [];
+};
 
-const uniqueColumnIds = (columnIds: string[]) => Array.from(new Set(columnIds))
+const uniqueColumnIds = (columnIds: string[]) => Array.from(new Set(columnIds));
 
 const normalizeColumnPinning = (
   value: unknown,
@@ -96,16 +98,16 @@ const normalizeColumnPinning = (
   const source =
     value && typeof value === "object"
       ? (value as ColumnPinningState)
-      : fallback ?? {}
+      : (fallback ?? {});
 
-  const allowed = validColumnIds ? new Set(validColumnIds) : undefined
+  const allowed = validColumnIds ? new Set(validColumnIds) : undefined;
   const filterAllowedColumn = (columnId: string) =>
-    !allowed || allowed.has(columnId)
+    !allowed || allowed.has(columnId);
 
   const left = uniqueColumnIds([
     ...DEFAULT_LEFT_PINNED_COLUMNS,
     ...toStringArray(source.left).filter(filterAllowedColumn),
-  ])
+  ]);
   const right = uniqueColumnIds(
     toStringArray(source.right).filter(
       (columnId) =>
@@ -113,31 +115,31 @@ const normalizeColumnPinning = (
         !left.includes(columnId) &&
         columnId !== "filter",
     ),
-  )
+  );
 
   return {
     left,
     right: [...right, ...DEFAULT_RIGHT_PINNED_COLUMNS],
-  }
-}
+  };
+};
 
 const parseColumnOrder = (value: string | null): ColumnOrderState => {
-  if (!value) return []
+  if (!value) return [];
   try {
-    const parsed = JSON.parse(value)
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed)
       ? parsed.filter((item): item is string => typeof item === "string")
-      : []
+      : [];
   } catch {
-    return []
+    return [];
   }
-}
+};
 
 const normalizeColumnSizing = (
   value: unknown,
   validColumnIds?: Set<string>,
 ): ColumnSizingState => {
-  if (!value || typeof value !== "object") return {}
+  if (!value || typeof value !== "object") return {};
 
   const entries = Object.entries(value as Record<string, unknown>).filter(
     ([columnId, width]) =>
@@ -145,43 +147,43 @@ const normalizeColumnSizing = (
       typeof width === "number" &&
       Number.isFinite(width) &&
       width > 0,
-  )
+  );
 
-  return Object.fromEntries(entries) as ColumnSizingState
-}
+  return Object.fromEntries(entries) as ColumnSizingState;
+};
 
 const parseColumnSizing = (
   value: string | null,
   validColumnIds?: Set<string>,
 ): ColumnSizingState => {
-  if (!value) return {}
+  if (!value) return {};
   try {
-    return normalizeColumnSizing(JSON.parse(value), validColumnIds)
+    return normalizeColumnSizing(JSON.parse(value), validColumnIds);
   } catch {
-    return {}
+    return {};
   }
-}
+};
 
 interface ColumnNode {
-  id?: unknown
-  accessorKey?: unknown
-  columns?: unknown
+  id?: unknown;
+  accessorKey?: unknown;
+  columns?: unknown;
 }
 
 const isColumnNode = (value: unknown): value is ColumnNode =>
-  typeof value === "object" && value !== null
+  typeof value === "object" && value !== null;
 
 const extractColumnId = (column: unknown): string | undefined => {
-  if (!isColumnNode(column)) return undefined
+  if (!isColumnNode(column)) return undefined;
 
-  if (typeof column.id === "string") return column.id
-  if (typeof column.accessorKey === "string") return column.accessorKey
+  if (typeof column.id === "string") return column.id;
+  if (typeof column.accessorKey === "string") return column.accessorKey;
 
-  return undefined
-}
+  return undefined;
+};
 
 const collectLeafColumnIds = (columns: unknown[]): string[] => {
-  const ids: string[] = []
+  const ids: string[] = [];
 
   const walkColumns = (items: unknown[]) => {
     items.forEach((item) => {
@@ -190,19 +192,19 @@ const collectLeafColumnIds = (columns: unknown[]): string[] => {
         Array.isArray(item.columns) &&
         item.columns.length > 0
       ) {
-        walkColumns(item.columns)
-        return
+        walkColumns(item.columns);
+        return;
       }
 
-      const columnId = extractColumnId(item)
-      if (columnId) ids.push(columnId)
-    })
-  }
+      const columnId = extractColumnId(item);
+      if (columnId) ids.push(columnId);
+    });
+  };
 
-  walkColumns(columns)
+  walkColumns(columns);
 
-  return ids
-}
+  return ids;
+};
 
 const NoobTanstackTable = forwardRef(
   // eslint-disable-next-line @typescript-eslint/ban-types
@@ -247,24 +249,31 @@ const NoobTanstackTable = forwardRef(
       tableAlertOptionRender,
       savedViews,
       serverExport,
-    } = props
+      style,
+      classNames,
+      groupHeaderRender,
+      emptyState,
+      rowHeight,
+    } = props;
 
-    const urlSyncEnabled = syncWithUrl && manualFiltering
+    const urlSyncEnabled = syncWithUrl && manualFiltering;
     const {
       initialFilters,
       initialSearchParams: initialUrlSearchParams,
       initialGlobalSearch,
       syncFiltersToUrl,
       syncGlobalSearchToUrl,
-    } = useTableUrlSync({ enabled: urlSyncEnabled })
+    } = useTableUrlSync({ enabled: urlSyncEnabled });
 
-    const token = useAppTheme()
-    const [rowData, setRowData] = useState<T[]>(dataSource ?? [])
-    const [rowCount, setRowCount] = useState<number | undefined>(undefined)
+    const token = useAppTheme();
+    // Non-throwing: actions may not need an apiClient, so don't force a provider.
+    const tableConfig = useTableConfigSafe();
+    const [rowData, setRowData] = useState<T[]>(dataSource ?? []);
+    const [rowCount, setRowCount] = useState<number | undefined>(undefined);
     // Backend grand totals (full filtered set) for the sticky footer.
     const [footerSummary, setFooterSummary] = useState<
       Record<string, unknown> | undefined
-    >(undefined)
+    >(undefined);
 
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
       columnsState?.persistenceKey
@@ -282,14 +291,14 @@ const NoobTanstackTable = forwardRef(
         : {
             ...getHiddenColumns(columns ?? []),
           },
-    )
+    );
     const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(
       () => {
         const fallbackPinning = normalizeColumnPinning(
           tableProps?.initialState?.columnPinning,
-        )
+        );
 
-        if (!columnsState?.persistenceKey) return fallbackPinning
+        if (!columnsState?.persistenceKey) return fallbackPinning;
 
         try {
           return normalizeColumnPinning(
@@ -299,63 +308,63 @@ const NoobTanstackTable = forwardRef(
               ) ?? "null",
             ),
             fallbackPinning,
-          )
+          );
         } catch {
-          return fallbackPinning
+          return fallbackPinning;
         }
       },
-    )
+    );
 
     const [tablePagination, setTablePagination] = useState<PaginationState>({
       ...pagination,
-    })
+    });
     const [editableRowKey, setEditableRowKey] = useState<React.Key[]>(
       editable?.editedRowKey ?? [],
-    )
+    );
 
-    const { indexColumn } = useTanstackTable<T>()
+    const { indexColumn } = useTanstackTable<T>();
 
-    const extraColumns = getExtraColumns<T>({ rowSelection, rowExpandable })
+    const extraColumns = getExtraColumns<T>({ rowSelection, rowExpandable });
 
     const [rowSelectionState, setRowSelectionState] = useSafeState(
       tableProps?.initialState?.rowSelection
         ? tableProps.initialState.rowSelection
-        : rowSelection?.selectedRowKeys ?? {},
-    )
-    const isParentSyncRef = useRef(false)
+        : (rowSelection?.selectedRowKeys ?? {}),
+    );
+    const isParentSyncRef = useRef(false);
 
-    const [sorting, setSorting] = useState<SortingState>([])
+    const [sorting, setSorting] = useState<SortingState>([]);
     const [grouping, setGrouping] = useState<GroupingState>(() => {
-      if (!columnsState?.persistenceKey) return []
+      if (!columnsState?.persistenceKey) return [];
       try {
         const stored = localStorage.getItem(
           `${columnsState.persistenceKey}-grouping`,
-        )
-        return stored ? JSON.parse(stored) : []
+        );
+        return stored ? JSON.parse(stored) : [];
       } catch {
-        return []
+        return [];
       }
-    })
+    });
     // note default to all-expanded when grouping is active so groups open by default
     const [expanded, setExpanded] = useState<ExpandedState>(
       grouping.length > 0 ? true : {},
-    )
+    );
     const [globalTextSearch, setGlobalTextSearch] = useState<
       string | undefined
-    >(urlSyncEnabled ? initialGlobalSearch : undefined)
+    >(urlSyncEnabled ? initialGlobalSearch : undefined);
 
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       urlSyncEnabled && Object.keys(initialFilters).length > 0
         ? (initialFilters as unknown as ColumnFiltersState)
         : [],
-    )
+    );
 
     const isInfinite =
       (paginationType === "virtual" || paginationType === "cursor") &&
-      request !== undefined
-    const isCursor = paginationType === "cursor" && request !== undefined
-    const [_cursor, setCursor] = useState<string | number | null>(null)
+      request !== undefined;
+    const isCursor = paginationType === "cursor" && request !== undefined;
+    const [_cursor, setCursor] = useState<string | number | null>(null);
 
     // Hook 1: useRequest (for standard pagination)
     const { loading, refresh, runAsync } = useRequest(
@@ -364,12 +373,12 @@ const NoobTanstackTable = forwardRef(
         ready: !isInfinite,
         onSuccess: (response: RequestResponse<T>) => {
           if (dataSource) {
-            setRowData(() => dataSource)
+            setRowData(() => dataSource);
           } else {
-            setRowData(() => response.data)
+            setRowData(() => response.data);
           }
-          setRowCount(response.total || undefined)
-          setFooterSummary(response.summary)
+          setRowCount(response.total || undefined);
+          setFooterSummary(response.summary);
         },
         defaultParams: [
           {
@@ -383,14 +392,14 @@ const NoobTanstackTable = forwardRef(
         ],
         onBefore() {
           if (rowData?.length === 0) {
-            return true
+            return true;
           } else {
-            setRowData([])
+            setRowData([]);
           }
         },
         refreshDeps,
       },
-    )
+    );
 
     // note column visibility is a pure client concern — toggling it must NOT
     // refetch/reset the infinite stream (only filters/sort/search/grouping do).
@@ -401,8 +410,8 @@ const NoobTanstackTable = forwardRef(
         globalTextSearch,
         grouping,
         refreshDeps,
-      ])
-    }, [sorting, columnFilters, globalTextSearch, grouping, refreshDeps])
+      ]);
+    }, [sorting, columnFilters, globalTextSearch, grouping, refreshDeps]);
 
     // Hook 2: useInfiniteScroll (for virtual-infinite scroll)
     const {
@@ -422,12 +431,12 @@ const NoobTanstackTable = forwardRef(
             total: 0,
             success: true,
             lastPageSize: 0,
-          }
+          };
         }
 
-        const nextPage = currentData ? currentData.page + 1 : 1
-        const limit = pagination.pageSize
-        const cursorVal = currentData ? currentData.nextCursor : null
+        const nextPage = currentData ? currentData.page + 1 : 1;
+        const limit = pagination.pageSize;
+        const cursorVal = currentData ? currentData.nextCursor : null;
 
         const requestParams: Record<string, any> = {
           limit,
@@ -439,20 +448,20 @@ const NoobTanstackTable = forwardRef(
           global_search_text: globalTextSearch,
           visible_columns: columnVisibility,
           ...(grouping.length > 0 ? { grouping } : {}),
-        }
+        };
 
         if (paginationType === "cursor") {
           // First page → no cursor; subsequent pages → the prior page's cursor.
-          requestParams.cursor = cursorVal
+          requestParams.cursor = cursorVal;
         } else {
-          requestParams.page = nextPage
+          requestParams.page = nextPage;
         }
 
-        const response = await request!(requestParams)
+        const response = await request!(requestParams);
 
         // Grand totals come from the backend (full filtered set) — keep the
         // latest so the footer is correct even on a partially-scrolled stream.
-        if (response.summary !== undefined) setFooterSummary(response.summary)
+        if (response.summary !== undefined) setFooterSummary(response.summary);
 
         return {
           list: response.data || [],
@@ -466,51 +475,51 @@ const NoobTanstackTable = forwardRef(
           total: currentData?.total ?? response.total ?? 0,
           success: response.success,
           lastPageSize: response.data?.length || 0,
-        }
+        };
       },
       {
         manual: true,
         isNoMore: (data) => {
-          if (!data) return false
+          if (!data) return false;
           if (paginationType === "cursor") {
             // Authoritative: the backend tells us whether more rows exist.
-            if (typeof data.hasNextPage === "boolean") return !data.hasNextPage
-            return data.nextCursor === null || data.nextCursor === undefined
+            if (typeof data.hasNextPage === "boolean") return !data.hasNextPage;
+            return data.nextCursor === null || data.nextCursor === undefined;
           }
           // Offset/virtual: stop at total, else when a short page comes back.
           if (data.total !== undefined && data.total > 0) {
-            return data.list.length >= data.total
+            return data.list.length >= data.total;
           }
-          return data.lastPageSize < pagination.pageSize
+          return data.lastPageSize < pagination.pageSize;
         },
       },
-    )
+    );
 
     // note Trigger initial load and reload when infinite scroll is active and dependencies change
     useEffect(() => {
       if (isInfinite) {
         // Reset the stream + cursor whenever filters/sort/search/grouping change.
-        infiniteReload()
+        infiniteReload();
       }
-    }, [isInfinite, reloadDepsSerialized])
+    }, [isInfinite, reloadDepsSerialized]);
 
     // note Synchronize local cursor state with infiniteData's nextCursor
     useEffect(() => {
       if (isCursor && infiniteData) {
-        setCursor(infiniteData.nextCursor)
+        setCursor(infiniteData.nextCursor);
       } else {
-        setCursor(null)
+        setCursor(null);
       }
-    }, [infiniteData?.nextCursor, isCursor])
+    }, [infiniteData?.nextCursor, isCursor]);
 
     // ── Group summary: correct per-group counts + financial totals ──────────
     // Independent of how many detail rows are loaded, so headers never show a
     // misleading "loaded count". Refetches when grouping/search/filters change.
-    const groupingKey = JSON.stringify(grouping)
+    const groupingKey = JSON.stringify(grouping);
     const { data: groupSummaryResult } = useRequest(
       async () => {
         if (!groupSummaryRequest || grouping.length === 0) {
-          return { data: [], grandTotal: { count: 0, total: "0.00" } }
+          return { data: [], grandTotal: { count: 0, total: "0.00" } };
         }
         return groupSummaryRequest({
           grouping,
@@ -518,40 +527,40 @@ const NoobTanstackTable = forwardRef(
           // Forward the SAME active column filters as the detail request, so
           // header counts/totals always match the filtered visible rows.
           ...columnFilters,
-        })
+        });
       },
       {
         ready: !!groupSummaryRequest && grouping.length > 0,
         refreshDeps: [groupingKey, globalTextSearch, columnFilters],
       },
-    )
+    );
 
     const groupSummaryMap = useMemo(() => {
-      const map = new Map<string, { count: number; total: string }>()
+      const map = new Map<string, { count: number; total: string }>();
       for (const g of groupSummaryResult?.data ?? []) {
         const keyStr = JSON.stringify(
           (g.key ?? []).map((v: unknown) => (v == null ? null : String(v))),
-        )
-        map.set(keyStr, { count: g.count, total: g.total })
+        );
+        map.set(keyStr, { count: g.count, total: g.total });
       }
-      return map
-    }, [groupSummaryResult])
+      return map;
+    }, [groupSummaryResult]);
 
     const getActivePageSize = () =>
-      tableProps?.state?.pagination?.pageSize ?? tablePagination.pageSize
+      tableProps?.state?.pagination?.pageSize ?? tablePagination.pageSize;
 
     const resetTablePageIndex = () => {
       setTablePagination((prev) =>
         prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 },
-      )
-    }
+      );
+    };
 
     const debouncedGlobalFilter = debounce((value) => {
-      setGlobalTextSearch(value)
+      setGlobalTextSearch(value);
       if (manualFiltering) {
         if (!isInfinite) {
-          const pageSize = getActivePageSize()
-          resetTablePageIndex()
+          const pageSize = getActivePageSize();
+          resetTablePageIndex();
           runAsync({
             ...columnFilters,
             page: 1,
@@ -559,96 +568,96 @@ const NoobTanstackTable = forwardRef(
             global_search_text: value,
             visible_columns: columnVisibility,
             sort: sorting,
-          })
+          });
         }
-        syncGlobalSearchToUrl(value)
+        syncGlobalSearchToUrl(value);
       }
-      tableProps?.onGlobalFilterChange?.(value)
-    }, 500)
+      tableProps?.onGlobalFilterChange?.(value);
+    }, 500);
 
     const memoizedColumn: Array<ColumnDef<T, any>> = useMemo(() => {
       return [...extraColumns, indexColumn, ...(columns ?? [])] as Array<
         ColumnDef<T, any>
-      >
-    }, [columns])
+      >;
+    }, [columns]);
 
     const validPersistedColumnIds = useMemo(
       () => new Set(collectLeafColumnIds(memoizedColumn)),
       [memoizedColumn],
-    )
+    );
 
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
       const fallbackSizing = normalizeColumnSizing(
         tableProps?.initialState?.columnSizing,
         validPersistedColumnIds,
-      )
-      if (!columnsState?.persistenceKey) return fallbackSizing
+      );
+      if (!columnsState?.persistenceKey) return fallbackSizing;
 
       const persistedSizing = parseColumnSizing(
         localStorage.getItem(`${columnsState?.persistenceKey}-column-sizing`),
         validPersistedColumnIds,
-      )
+      );
 
       return Object.keys(persistedSizing).length > 0
         ? persistedSizing
-        : fallbackSizing
-    })
+        : fallbackSizing;
+    });
 
     const [searchParams, setSearchParams] = useState<Record<string, unknown>>(
       urlSyncEnabled ? initialUrlSearchParams : {},
-    )
+    );
 
     // note Add state trackers for pinning and visibility
-    const [columnPinningVersion, setColumnPinningVersion] = useState(0)
-    const [columnVisibilityVersion, setColumnVisibilityVersion] = useState(0)
-    const [groupingVersion, _setGroupingVersion] = useState(0)
-    const columnSizingVersion = 0
+    const [columnPinningVersion, setColumnPinningVersion] = useState(0);
+    const [columnVisibilityVersion, setColumnVisibilityVersion] = useState(0);
+    const [groupingVersion, _setGroupingVersion] = useState(0);
+    const columnSizingVersion = 0;
 
     const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
       const fallbackOrder = toStringArray(
         tableProps?.initialState?.columnOrder,
-      ).filter((columnId) => validPersistedColumnIds.has(columnId))
-      if (!columnsState?.persistenceKey) return fallbackOrder
+      ).filter((columnId) => validPersistedColumnIds.has(columnId));
+      if (!columnsState?.persistenceKey) return fallbackOrder;
 
       const persistedOrder = parseColumnOrder(
         localStorage.getItem(`${columnsState?.persistenceKey}-column-order`),
-      ).filter((columnId) => validPersistedColumnIds.has(columnId))
+      ).filter((columnId) => validPersistedColumnIds.has(columnId));
 
-      return persistedOrder.length > 0 ? persistedOrder : fallbackOrder
-    })
+      return persistedOrder.length > 0 ? persistedOrder : fallbackOrder;
+    });
 
     const columnsDepsSerialized = useMemo(() => {
       return JSON.stringify(
         (columns ?? []).map((col: any) => {
-          if (!col) return null
+          if (!col) return null;
           return {
             id: col.id || col.accessorKey,
             size: col.size,
             minSize: col.minSize,
             maxSize: col.maxSize,
             visibility: col.visibility,
-          }
+          };
         }),
-      )
-    }, [columns])
+      );
+    }, [columns]);
 
     useUpdateEffect(() => {
       // 1. Column Sizing
       const fallbackSizing = normalizeColumnSizing(
         tableProps?.initialState?.columnSizing,
         validPersistedColumnIds,
-      )
-      let initialSizing = fallbackSizing
+      );
+      let initialSizing = fallbackSizing;
       if (columnsState?.persistenceKey) {
         const persistedSizing = parseColumnSizing(
           localStorage.getItem(`${columnsState?.persistenceKey}-column-sizing`),
           validPersistedColumnIds,
-        )
+        );
         if (Object.keys(persistedSizing).length > 0) {
-          initialSizing = persistedSizing
+          initialSizing = persistedSizing;
         }
       }
-      setColumnSizing(initialSizing)
+      setColumnSizing(initialSizing);
 
       // 2. Column Visibility
       const initialVisibility = columnsState?.persistenceKey
@@ -661,57 +670,57 @@ const NoobTanstackTable = forwardRef(
               ) ?? "{}",
             )
           : getHiddenColumns(columns ?? [])
-        : getHiddenColumns(columns ?? [])
-      setColumnVisibility(initialVisibility)
-      setColumnVisibilityVersion((v) => v + 1)
+        : getHiddenColumns(columns ?? []);
+      setColumnVisibility(initialVisibility);
+      setColumnVisibilityVersion((v) => v + 1);
 
       // 3. Column Pinning
       const fallbackPinning = normalizeColumnPinning(
         tableProps?.initialState?.columnPinning,
-      )
-      let initialPinning = fallbackPinning
+      );
+      let initialPinning = fallbackPinning;
       if (columnsState?.persistenceKey) {
         try {
           const parsed = JSON.parse(
             localStorage.getItem(
               `${columnsState?.persistenceKey}-column-pinning`,
             ) ?? "null",
-          )
+          );
           if (parsed) {
             initialPinning = normalizeColumnPinning(
               parsed,
               fallbackPinning,
               Array.from(validPersistedColumnIds),
-            )
+            );
           }
         } catch {}
       }
-      setColumnPinning(initialPinning)
-      setColumnPinningVersion((v) => v + 1)
+      setColumnPinning(initialPinning);
+      setColumnPinningVersion((v) => v + 1);
 
       // 4. Column Order
       const fallbackOrder = toStringArray(
         tableProps?.initialState?.columnOrder,
-      ).filter((columnId) => validPersistedColumnIds.has(columnId))
-      let initialOrder = fallbackOrder
+      ).filter((columnId) => validPersistedColumnIds.has(columnId));
+      let initialOrder = fallbackOrder;
       if (columnsState?.persistenceKey) {
         const persistedOrder = parseColumnOrder(
           localStorage.getItem(`${columnsState?.persistenceKey}-column-order`),
-        ).filter((columnId) => validPersistedColumnIds.has(columnId))
+        ).filter((columnId) => validPersistedColumnIds.has(columnId));
         if (persistedOrder.length > 0) {
-          initialOrder = persistedOrder
+          initialOrder = persistedOrder;
         }
       }
-      setColumnOrder(initialOrder)
-    }, [columnsDepsSerialized])
+      setColumnOrder(initialOrder);
+    }, [columnsDepsSerialized]);
 
     const activeData = useMemo(() => {
-      if (dataSource) return dataSource
-      if (isInfinite) return infiniteData?.list ?? []
-      return rowData
-    }, [dataSource, isInfinite, infiniteData?.list, rowData])
+      if (dataSource) return dataSource;
+      if (isInfinite) return infiniteData?.list ?? [];
+      return rowData;
+    }, [dataSource, isInfinite, infiniteData?.list, rowData]);
 
-    const activeRowCount = isInfinite ? infiniteData?.total ?? 0 : rowCount
+    const activeRowCount = isInfinite ? (infiniteData?.total ?? 0) : rowCount;
 
     const table = useReactTable({
       //  && dataSource?.length > 0 change to dataSource !== undefined (For some reason )
@@ -726,7 +735,7 @@ const NoobTanstackTable = forwardRef(
       columns: memoizedColumn,
       getCoreRowModel: getCoreRowModel(),
       getColumnCanGlobalFilter(column) {
-        return column.getIsVisible()
+        return column.getIsVisible();
       },
       ...tableProps,
       columnResizeMode: "onEnd",
@@ -780,68 +789,68 @@ const NoobTanstackTable = forwardRef(
         const resolved =
           typeof updater === "function"
             ? updater(table.getState().rowSelection)
-            : updater
-        setRowSelectionState(resolved)
+            : updater;
+        setRowSelectionState(resolved);
       },
       filterFns: {
         ISODateFilter: (value, row, key) => {
           // note Get the date value from the row data
-          const dateValue = value?.original?.[row]
+          const dateValue = value?.original?.[row];
 
           // note Return false if no date value or key
-          if (!dateValue) return false
+          if (!dateValue) return false;
 
           try {
             // note Parse the date value
-            const rowDate = dayjs(dateValue)
+            const rowDate = dayjs(dateValue);
 
             // note Return false if invalid date
-            if (!rowDate.isValid()) return false
+            if (!rowDate.isValid()) return false;
 
             // note Handle date range filter
             if (isArray(key)) {
-              const [startDate, endDate] = key
+              const [startDate, endDate] = key;
 
               // note Return false if invalid range dates
-              if (!startDate || !endDate) return false
+              if (!startDate || !endDate) return false;
 
               // note Compare date within range (inclusive)
-              return rowDate.isBetween(startDate, endDate, "day", "[]")
+              return rowDate.isBetween(startDate, endDate, "day", "[]");
             }
 
             // note Handle single date filter
             if (key) {
-              const filterDate = dayjs(key)
+              const filterDate = dayjs(key);
 
               // note Return false if invalid filter date
-              if (!filterDate.isValid()) return false
+              if (!filterDate.isValid()) return false;
 
               // note Compare dates for equality (ignoring time)
               return (
                 rowDate.format("YYYY-MM-DD") === filterDate.format("YYYY-MM-DD")
-              )
+              );
             }
 
-            return false
+            return false;
           } catch (error) {
-            console.error("Error in ISODateFilter:", error)
-            return false
+            console.error("Error in ISODateFilter:", error);
+            return false;
           }
         },
         BooleanFn: (row, value, key) => {
-          const isKeyFalse = key === "false"
-          return row?.original?.[value] !== isKeyFalse
+          const isKeyFalse = key === "false";
+          return row?.original?.[value] !== isKeyFalse;
         },
       },
       onSortingChange: (updater) => {
         const newSorting =
           typeof updater === "function"
             ? updater(table.getState().sorting)
-            : updater
-        setSorting(newSorting)
+            : updater;
+        setSorting(newSorting);
         if (manualSorting && !isInfinite) {
-          const pageSize = getActivePageSize()
-          resetTablePageIndex()
+          const pageSize = getActivePageSize();
+          resetTablePageIndex();
           runAsync({
             page: 1,
             limit: pageSize,
@@ -849,21 +858,21 @@ const NoobTanstackTable = forwardRef(
             sort: newSorting,
             global_search_text: globalTextSearch,
             visible_columns: columnVisibility,
-          })
+          });
         }
-        tableProps?.onSortingChange?.(newSorting)
+        tableProps?.onSortingChange?.(newSorting);
       },
       onGroupingChange: (updater) => {
         const newGrouping =
           typeof updater === "function"
             ? updater(table.getState().grouping)
-            : updater
-        setGrouping(newGrouping)
+            : updater;
+        setGrouping(newGrouping);
         // note keep groups open by default; clear expansion when grouping removed
-        setExpanded(newGrouping.length > 0 ? true : {})
+        setExpanded(newGrouping.length > 0 ? true : {});
         if (manualGrouping && !isInfinite) {
-          const pageSize = getActivePageSize()
-          resetTablePageIndex()
+          const pageSize = getActivePageSize();
+          resetTablePageIndex();
           runAsync({
             page: 1,
             limit: pageSize,
@@ -872,7 +881,7 @@ const NoobTanstackTable = forwardRef(
             grouping: newGrouping,
             global_search_text: globalTextSearch,
             visible_columns: columnVisibility,
-          })
+          });
         }
       },
       getRowCanExpand: () => true,
@@ -880,87 +889,87 @@ const NoobTanstackTable = forwardRef(
         const newOrder =
           typeof updater === "function"
             ? updater(table.getState().columnOrder)
-            : updater
+            : updater;
         const validColumnIds = new Set(
           table.getAllLeafColumns().map((column) => column.id),
-        )
+        );
         const normalizedOrder = toStringArray(newOrder).filter((columnId) =>
           validColumnIds.has(columnId),
-        )
-        setColumnOrder(normalizedOrder)
+        );
+        setColumnOrder(normalizedOrder);
         if (columnsState?.persistenceKey) {
           localStorage.setItem(
             `${columnsState?.persistenceKey}-column-order`,
             JSON.stringify(normalizedOrder),
-          )
+          );
         }
       },
       onColumnVisibilityChange: (updater) => {
         const newVisibility =
           typeof updater === "function"
             ? updater(table.getState().columnVisibility)
-            : updater
-        setColumnVisibility(newVisibility)
+            : updater;
+        setColumnVisibility(newVisibility);
         if (columnsState?.persistenceKey) {
           localStorage.setItem(
             `${columnsState?.persistenceKey}-column-visibility`,
             JSON.stringify(newVisibility),
-          )
+          );
         }
 
-        setColumnVisibilityVersion((v) => v + 1)
+        setColumnVisibilityVersion((v) => v + 1);
       },
       onColumnPinningChange: (updater) => {
         const newPinning =
           typeof updater === "function"
             ? updater(table.getState().columnPinning)
-            : updater
+            : updater;
         const validColumnIds = table
           .getAllLeafColumns()
-          .map((column) => column.id)
+          .map((column) => column.id);
         const normalizedPinning = normalizeColumnPinning(
           newPinning,
           undefined,
           validColumnIds,
-        )
+        );
         if (columnsState?.persistenceKey) {
           localStorage.setItem(
             `${columnsState?.persistenceKey}-column-pinning`,
             JSON.stringify(normalizedPinning),
-          )
+          );
         }
-        setColumnPinningVersion((v) => v + 1)
-        setColumnPinning(normalizedPinning)
+        setColumnPinningVersion((v) => v + 1);
+        setColumnPinning(normalizedPinning);
       },
       onColumnSizingChange: (updater) => {
         setColumnSizing((prev) => {
           const nextSizing =
-            typeof updater === "function" ? updater(prev) : updater
+            typeof updater === "function" ? updater(prev) : updater;
           const normalizedSizing = normalizeColumnSizing(
             nextSizing,
             validPersistedColumnIds,
-          )
+          );
 
           if (columnsState?.persistenceKey) {
             localStorage.setItem(
               `${columnsState?.persistenceKey}-column-sizing`,
               JSON.stringify(normalizedSizing),
-            )
+            );
           }
 
-          return normalizedSizing
-        })
+          return normalizedSizing;
+        });
       },
       onColumnFiltersChange: (updater) => {
         const newColumnFilters =
           typeof updater === "function"
             ? updater(table?.getState()?.columnFilters)
-            : updater
-        setColumnFilters(newColumnFilters)
+            : updater;
+        setColumnFilters(newColumnFilters);
         if (manualFiltering) {
           if (!isInfinite) {
-            const pageSize = getActivePageSize()
-            resetTablePageIndex()
+            const pageSize = getActivePageSize();
+            resetTablePageIndex();
             runAsync({
               ...newColumnFilters,
               page: 1,
@@ -968,49 +977,49 @@ const NoobTanstackTable = forwardRef(
               global_search_text: globalTextSearch,
               visible_columns: columnVisibility,
               sort: sorting,
-            })
+            });
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          syncFiltersToUrl(newColumnFilters as any)
+          syncFiltersToUrl(newColumnFilters as any);
         }
-        tableProps?.onColumnFiltersChange?.(newColumnFilters)
+        tableProps?.onColumnFiltersChange?.(newColumnFilters);
       },
       onGlobalFilterChange: (value) => {
-        debouncedGlobalFilter(value)
+        debouncedGlobalFilter(value);
       },
       meta: {
         reload: () => {
           if (isInfinite) {
-            infiniteReload()
+            infiniteReload();
           } else {
-            refresh()
+            refresh();
           }
-          table?.resetRowSelection()
+          table?.resetRowSelection();
         },
         updateData: (rowIndex, columnId, value) => {
-          const data = dataSource ?? rowData
+          const data = dataSource ?? rowData;
 
-          const editedRow = { ...data[rowIndex], [columnId]: value }
+          const editedRow = { ...data[rowIndex], [columnId]: value };
           const updateData = data?.map((row, index) => {
             if (index === rowIndex) {
               return {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-type-assertion
                 ...data[rowIndex]!,
                 [columnId]: value,
-              }
+              };
             }
-            return row
-          })
-          const res = { record: editedRow, recordList: updateData }
-          setRowData(updateData)
-          return editable?.onDataSourceChange(res)
+            return row;
+          });
+          const res = { record: editedRow, recordList: updateData };
+          setRowData(updateData);
+          return editable?.onDataSourceChange(res);
         },
         updateEditRowKey: (keys) => {
-          setEditableRowKey(keys)
-          editable?.setEditedRowKey?.(keys)
+          setEditableRowKey(keys);
+          editable?.setEditedRowKey?.(keys);
         },
         onSearchParamsChange: (values) => {
-          setSearchParams(values)
+          setSearchParams(values);
         },
         groupSummary: groupSummaryMap,
         footerSummary,
@@ -1029,11 +1038,11 @@ const NoobTanstackTable = forwardRef(
         const newPagination =
           typeof pagination === "function"
             ? pagination(table.getState().pagination)
-            : pagination
+            : pagination;
         setTablePagination({
           pageIndex: newPagination.pageIndex,
           pageSize: newPagination.pageSize,
-        })
+        });
         if (manualPagination && !isInfinite) {
           runAsync({
             page: newPagination.pageIndex + 1,
@@ -1042,9 +1051,9 @@ const NoobTanstackTable = forwardRef(
             sort: sorting,
             global_search_text: globalTextSearch,
             visible_columns: columnVisibility,
-          })
+          });
         }
-        tableProps?.onPaginationChange?.(newPagination)
+        tableProps?.onPaginationChange?.(newPagination);
       },
       getFilteredRowModel: getFilteredRowModel(),
       getSortedRowModel: getSortedRowModel(),
@@ -1055,34 +1064,34 @@ const NoobTanstackTable = forwardRef(
       getFacetedMinMaxValues: getFacetedMinMaxValues(),
       // note keep grouped columns in place (avoids duplicate headers / misalignment)
       groupedColumnMode: false,
-    })
+    });
 
     // note notify parent when internal selection changes (skip if triggered by parent sync)
     useUpdateEffect(() => {
       if (isParentSyncRef.current) {
-        isParentSyncRef.current = false
-        return
+        isParentSyncRef.current = false;
+        return;
       }
-      rowSelection?.onChange?.(getRowIds(table), getSelectedRowModel(table))
-    }, [rowSelectionState])
+      rowSelection?.onChange?.(getRowIds(table), getSelectedRowModel(table));
+    }, [rowSelectionState]);
 
     // note sync parent selectedRowKeys into internal state (for modal pre-selection)
     useUpdateEffect(() => {
       if (rowSelection?.selectedRowKeys) {
-        isParentSyncRef.current = true
-        setRowSelectionState(rowSelection.selectedRowKeys)
+        isParentSyncRef.current = true;
+        setRowSelectionState(rowSelection.selectedRowKeys);
       }
-    }, [JSON.stringify(rowSelection?.selectedRowKeys)])
+    }, [JSON.stringify(rowSelection?.selectedRowKeys)]);
 
     // note update effect for row visibility on active key change
     useUpdateEffect(() => {
-      setColumnVisibility(getHiddenColumns(columns ?? []))
-    }, [toolbar?.menu?.activeKey])
+      setColumnVisibility(getHiddenColumns(columns ?? []));
+    }, [toolbar?.menu?.activeKey]);
 
     // note update effect for row visibility on active key change
     useUpdateEffect(() => {
-      setEditableRowKey(editable?.editedRowKey ?? [])
-    }, [editable?.editedRowKey])
+      setEditableRowKey(editable?.editedRowKey ?? []);
+    }, [editable?.editedRowKey]);
 
     // note Expose reload method
     useImperativeHandle(
@@ -1090,36 +1099,36 @@ const NoobTanstackTable = forwardRef(
       () => ({
         reload: () => {
           if (isInfinite) {
-            infiniteReload()
+            infiniteReload();
           } else {
-            refresh()
+            refresh();
           }
-          table?.resetRowSelection()
+          table?.resetRowSelection();
         },
         getTable: () => table,
       }),
       [refresh, infiniteReload, table, isInfinite],
-    )
+    );
 
     // ─── Saved Views / Server Export ─────────────────────────────────────────
     // note columnFilters is an empty ARRAY initially / after reset, and a
     // Record<field, { operator, value }> once the filter drawer applies values.
     // Always normalize to a record for the wire format.
     const normalizeFilterState = (value: unknown): Record<string, unknown> => {
-      if (!value || typeof value !== "object") return {}
+      if (!value || typeof value !== "object") return {};
       if (Array.isArray(value)) {
-        const out: Record<string, unknown> = {}
+        const out: Record<string, unknown> = {};
         for (const item of value) {
           if (item && typeof item === "object" && "id" in item) {
             out[(item as { id: string }).id] = (
               item as { value?: unknown }
-            ).value
+            ).value;
           }
         }
-        return out
+        return out;
       }
-      return value as Record<string, unknown>
-    }
+      return value as Record<string, unknown>;
+    };
 
     // note Snapshot of everything a saved view captures
     const getViewState = (): TableViewState => ({
@@ -1129,51 +1138,94 @@ const NoobTanstackTable = forwardRef(
       visibleColumns: columnVisibility,
       globalSearch: globalTextSearch,
       grouping: grouping as string[],
-    })
+      // Column layout preferences.
+      columnOrder,
+      columnSizing,
+      columnPinning,
+    });
 
     // note Restores a saved view with a single refetch + URL sync
     const applyViewState = (state: TableViewState) => {
       const nextFilters = normalizeFilterState(
         state.filters,
-      ) as unknown as ColumnFiltersState
-      const nextSearchParams = state.searchParams ?? {}
-      const nextSorting = (state.sorting ?? []) as SortingState
+      ) as unknown as ColumnFiltersState;
+      const nextSearchParams = state.searchParams ?? {};
+      const nextSorting = (state.sorting ?? []) as SortingState;
       const nextVisibility =
-        state.visibleColumns ?? getHiddenColumns(columns ?? [])
-      const nextSearch = state.globalSearch || undefined
+        state.visibleColumns ?? getHiddenColumns(columns ?? []);
+      const nextSearch = state.globalSearch || undefined;
       // A view with no grouping must CLEAR any active grouping (not leave it on).
-      const nextGrouping = (state.grouping ?? []) as GroupingState
+      const nextGrouping = (state.grouping ?? []) as GroupingState;
 
-      setColumnFilters(nextFilters)
-      setSearchParams(nextSearchParams)
-      setSorting(nextSorting)
-      setColumnVisibility(nextVisibility)
-      setColumnVisibilityVersion((v) => v + 1)
+      setColumnFilters(nextFilters);
+      setSearchParams(nextSearchParams);
+      setSorting(nextSorting);
+      setColumnVisibility(nextVisibility);
+      setColumnVisibilityVersion((v) => v + 1);
       if (columnsState?.persistenceKey) {
         localStorage.setItem(
           `${columnsState.persistenceKey}-column-visibility`,
           JSON.stringify(nextVisibility),
-        )
+        );
       }
-      setGlobalTextSearch(nextSearch)
+      setGlobalTextSearch(nextSearch);
 
       // Restore grouping the same way the Group-By control does: state +
       // expansion + persistence. Changing `grouping` also resets the cursor
       // stream / triggers a refetch via reloadDepsSerialized.
-      setGrouping(nextGrouping)
-      setExpanded(nextGrouping.length > 0 ? true : {})
+      setGrouping(nextGrouping);
+      setExpanded(nextGrouping.length > 0 ? true : {});
       if (columnsState?.persistenceKey) {
         if (nextGrouping.length > 0) {
           localStorage.setItem(
             `${columnsState.persistenceKey}-grouping`,
             JSON.stringify(nextGrouping),
-          )
+          );
         } else {
-          localStorage.removeItem(`${columnsState.persistenceKey}-grouping`)
+          localStorage.removeItem(`${columnsState.persistenceKey}-grouping`);
         }
       }
 
-      setTablePagination((prev) => ({ ...prev, pageIndex: 0 }))
+      // Column layout (order / sizing / pinning) — only restore what the view
+      // actually captured, so older views (saved before these were tracked)
+      // leave the current layout untouched instead of clearing it.
+      if (state.columnOrder !== undefined) {
+        const nextOrder = state.columnOrder as ColumnOrderState;
+        setColumnOrder(nextOrder);
+        if (columnsState?.persistenceKey) {
+          localStorage.setItem(
+            `${columnsState.persistenceKey}-column-order`,
+            JSON.stringify(nextOrder),
+          );
+        }
+      }
+      if (state.columnPinning !== undefined) {
+        const nextPinning = normalizeColumnPinning(
+          state.columnPinning,
+          undefined,
+          table.getAllLeafColumns().map((c) => c.id),
+        );
+        setColumnPinning(nextPinning);
+        setColumnPinningVersion((v) => v + 1);
+        if (columnsState?.persistenceKey) {
+          localStorage.setItem(
+            `${columnsState.persistenceKey}-column-pinning`,
+            JSON.stringify(nextPinning),
+          );
+        }
+      }
+      if (state.columnSizing !== undefined) {
+        const nextSizing = state.columnSizing as ColumnSizingState;
+        setColumnSizing(nextSizing);
+        if (columnsState?.persistenceKey) {
+          localStorage.setItem(
+            `${columnsState.persistenceKey}-column-sizing`,
+            JSON.stringify(nextSizing),
+          );
+        }
+      }
+
+      setTablePagination((prev) => ({ ...prev, pageIndex: 0 }));
 
       if (manualFiltering && request) {
         runAsync({
@@ -1184,44 +1236,65 @@ const NoobTanstackTable = forwardRef(
           global_search_text: nextSearch,
           visible_columns: nextVisibility,
           ...(nextGrouping.length > 0 ? { grouping: nextGrouping } : {}),
-        })
+        });
         syncFiltersToUrl(
           nextFilters as unknown as Record<string, UrlFilterValue>,
-        )
-        syncGlobalSearchToUrl(nextSearch)
+        );
+        syncGlobalSearchToUrl(nextSearch);
       }
-    }
+    };
 
     // note Clears all applied state back to the table's initial defaults
     const resetViewState = () => {
-      const defaultVisibility = getHiddenColumns(columns ?? [])
-      setColumnFilters([])
-      setSearchParams({})
-      setSorting([])
-      setColumnVisibility(defaultVisibility)
-      setColumnVisibilityVersion((v) => v + 1)
+      const defaultVisibility = getHiddenColumns(columns ?? []);
+      setColumnFilters([]);
+      setSearchParams({});
+      setSorting([]);
+      setColumnVisibility(defaultVisibility);
+      setColumnVisibilityVersion((v) => v + 1);
       if (columnsState?.persistenceKey) {
         localStorage.setItem(
           `${columnsState.persistenceKey}-column-visibility`,
           JSON.stringify(defaultVisibility),
-        )
+        );
       }
-      setGlobalTextSearch(undefined)
+      setGlobalTextSearch(undefined);
       // System Default also clears grouping (it was a saved/applied state too).
-      setGrouping([])
-      setExpanded({})
+      setGrouping([]);
+      setExpanded({});
       if (columnsState?.persistenceKey) {
-        localStorage.removeItem(`${columnsState.persistenceKey}-grouping`)
+        localStorage.removeItem(`${columnsState.persistenceKey}-grouping`);
       }
-      setTablePagination((prev) => ({ ...prev, pageIndex: 0 }))
-      if (manualFiltering && request) {
-        runAsync({ page: 1, limit: tablePagination.pageSize ?? 10 })
-        syncFiltersToUrl({})
-        syncGlobalSearchToUrl(undefined)
-      }
-    }
 
-    const SYSTEM_COLUMN_IDS = new Set(["rowSelection", "index", "filter"])
+      // Restore column layout to its initial defaults (from tableProps) and drop
+      // any persisted overrides, so "System Default" is a full reset.
+      const defaultOrder = toStringArray(
+        tableProps?.initialState?.columnOrder,
+      ).filter((columnId) => validPersistedColumnIds.has(columnId));
+      const defaultPinning = normalizeColumnPinning(
+        tableProps?.initialState?.columnPinning,
+      );
+      const defaultSizing = (tableProps?.initialState?.columnSizing ??
+        {}) as ColumnSizingState;
+      setColumnOrder(defaultOrder);
+      setColumnPinning(defaultPinning);
+      setColumnPinningVersion((v) => v + 1);
+      setColumnSizing(defaultSizing);
+      if (columnsState?.persistenceKey) {
+        localStorage.removeItem(`${columnsState.persistenceKey}-column-order`);
+        localStorage.removeItem(`${columnsState.persistenceKey}-column-pinning`);
+        localStorage.removeItem(`${columnsState.persistenceKey}-column-sizing`);
+      }
+
+      setTablePagination((prev) => ({ ...prev, pageIndex: 0 }));
+      if (manualFiltering && request) {
+        runAsync({ page: 1, limit: tablePagination.pageSize ?? 10 });
+        syncFiltersToUrl({});
+        syncGlobalSearchToUrl(undefined);
+      }
+    };
+
+    const SYSTEM_COLUMN_IDS = new Set(["rowSelection", "index", "filter"]);
 
     // note Current table state in the wire format the export endpoint expects
     const buildExportPayload = (): ServerExportPayload => {
@@ -1234,12 +1307,12 @@ const NoobTanstackTable = forwardRef(
             typeof col.columnDef.header === "string"
               ? col.columnDef.header
               : col.id,
-        }))
+        }));
 
       const filterEntries = {
         ...(serverExport?.extraFilters ?? {}),
         ...normalizeFilterState(columnFilters),
-      }
+      };
 
       return {
         listKey: serverExport?.listKey ?? "",
@@ -1252,23 +1325,50 @@ const NoobTanstackTable = forwardRef(
               direction: (s.desc ? "desc" : "asc") as "asc" | "desc",
             }))
           : undefined,
-      }
-    }
+      };
+    };
 
     const hasInitialUrlState =
       urlSyncEnabled &&
-      (Object.keys(initialFilters ?? {}).length > 0 || !!initialGlobalSearch)
+      (Object.keys(initialFilters ?? {}).length > 0 || !!initialGlobalSearch);
 
+    // Runtime context injected into every config-driven action handler. Built
+    // once here so consumers only supply the declarative `options.export` /
+    // `options.actions` config.
+    const actionCtx = {
+      table,
+      selectedRows: getSelectedRowModel(table) ?? [],
+      selectedKeys: getRowIds(table) ?? [],
+      getPayload: buildExportPayload,
+      apiClient: tableConfig?.apiClient,
+    };
+    const optionsObj = options === false ? undefined : options;
+    const optionExport =
+      optionsObj?.export && typeof optionsObj.export === "object"
+        ? optionsObj.export
+        : undefined;
+    const optionActions = optionsObj?.actions ?? [];
     const stateToolbarActions = [
       savedViews && manualFiltering ? (
-        <SavedViewsControl
-          key="saved-views"
-          listKey={savedViews.listKey}
-          getViewState={getViewState}
-          applyViewState={applyViewState}
-          resetViewState={resetViewState}
-          hasInitialUrlState={hasInitialUrlState}
-        />
+        <React.Fragment key="saved-views">
+          {savedViews.render
+            ? savedViews.render({
+                listKey: savedViews.listKey,
+                getViewState,
+                applyViewState,
+                resetViewState,
+                hasInitialUrlState,
+              })
+            : (
+                <LocalSavedViews
+                  listKey={savedViews.listKey}
+                  getViewState={getViewState}
+                  applyViewState={applyViewState}
+                  resetViewState={resetViewState}
+                  hasInitialUrlState={hasInitialUrlState}
+                />
+              )}
+        </React.Fragment>
       ) : undefined,
       serverExport && manualFiltering ? (
         <ServerExportButton
@@ -1276,7 +1376,13 @@ const NoobTanstackTable = forwardRef(
           getPayload={buildExportPayload}
         />
       ) : undefined,
-    ]
+      optionExport ? (
+        <Export key="export" {...optionExport} ctx={actionCtx} />
+      ) : undefined,
+      ...optionActions.map((cfg, i) => (
+        <TableAction key={`action-${cfg.key ?? i}`} {...cfg} ctx={actionCtx} />
+      )),
+    ];
     const internalTableProps = {
       bordered,
       tableLoadingRowCount,
@@ -1285,7 +1391,12 @@ const NoobTanstackTable = forwardRef(
       isFetchingNextPage: isInfinite ? infiniteLoadingMore : undefined,
       onLoadMore: isInfinite ? infiniteLoadMore : undefined,
       useViewportHeight: isInfinite,
-    }
+      style,
+      classNames,
+      groupHeaderRender,
+      emptyState,
+      rowHeight,
+    };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tableOptions: any =
@@ -1295,12 +1406,12 @@ const NoobTanstackTable = forwardRef(
             search: true,
             ...options,
           }
-        : false
+        : false;
 
     const selectedRowCount = Object.keys(
       table?.getState()?.rowSelection || {},
-    ).length
-    const isCheckboxSelection = rowSelection?.selectionType !== "radio"
+    ).length;
+    const isCheckboxSelection = rowSelection?.selectionType !== "radio";
 
     return (
       <>
@@ -1331,9 +1442,9 @@ const NoobTanstackTable = forwardRef(
                   className="cursor-pointer text-md"
                   onClick={() => {
                     if (tableOptions?.reload?.onClick) {
-                      tableOptions.reload.onClick()
+                      tableOptions.reload.onClick();
                     } else {
-                      refresh()
+                      refresh();
                     }
                   }}
                   key="reload"
@@ -1366,7 +1477,7 @@ const NoobTanstackTable = forwardRef(
                     getRowIds(table),
                     getSelectedRowModel(table),
                     () => {
-                      table.resetRowSelection()
+                      table.resetRowSelection();
                     },
                   )
                 : undefined
@@ -1439,10 +1550,10 @@ const NoobTanstackTable = forwardRef(
           </div>
         </div>
       </>
-    )
+    );
   },
 ) as <T>(
   props: TanstackTableProps<T> & { ref?: ForwardedRef<TableRef> },
-) => JSX.Element
+) => JSX.Element;
 
-export { NoobTanstackTable }
+export { NoobTanstackTable };

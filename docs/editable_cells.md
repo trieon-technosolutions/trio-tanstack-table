@@ -102,3 +102,23 @@ The `meta.valueType` supports the following input components:
 | `"password"` | hidden text field | Passwords, tokens |
 | `"checkbox"`| checkbox selector | Toggles, boolean configurations |
 | `"radio"` | radio list | Mutually exclusive options |
+
+---
+
+## Dynamic (API-backed) Selects
+
+A `select` whose options are **fetched from your API** (via `apiToCall` on the column meta) uses the package's infinite-scroll dropdown. This requires your app to be wrapped in [`TableConfigProvider`](../README.md#setup-tableconfigprovider) so the dropdown can reach your Axios instance:
+
+```tsx
+<TableConfigProvider config={{ apiClient, selectParams: { pageSizeKey: "limit" } }}>
+  {/* editable table here */}
+</TableConfigProvider>
+```
+
+`selectParams` maps the dropdown's pagination params (`page`, `pageSize`, `search`, `filters`) to your backend's names. Static selects (with a fixed `valueEnum`) need no provider.
+
+---
+
+## Styling Cells
+
+Editable and read-only cells honor the per-slot styling API — use `style.bodyCell` / `classNames.bodyCell` to theme all data cells. See the [styling section in the README](../README.md#styling--theming).

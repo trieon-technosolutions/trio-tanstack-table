@@ -56,6 +56,17 @@ The table synchronizes state using the following query parameters:
 
 ---
 
+## Interaction with Saved Views
+
+URL state and [Saved Views](../README.md#saved-views) can both restore a table configuration, so there is a defined precedence:
+
+- **A URL with filter/search state always wins.** When the table mounts with state in the URL, an auto-applied **default Saved View is skipped** — the shared link is honored as-is. This is surfaced to custom Saved Views controls via the `hasInitialUrlState` flag in their `api`.
+- **Applying a Saved View** (default or manual) updates the URL to match, so the result stays shareable.
+
+This keeps shared/bookmarked links deterministic even for users who have a personal default view pinned.
+
+---
+
 ## Benefits of URL Sync
 
 1. **Shareable Views**: Users can copy-paste the URL from their browser and send it to coworkers. When opened, the table will display identical pages, filters, and sorts.

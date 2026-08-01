@@ -7,5 +7,12 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   minify: false,
-  external: ["react", "react-dom", "antd"],
+  external: [
+    "react",
+    "react-dom",
+    "react/jsx-runtime",
+    "antd",
+    "react-router-dom",
+    "@tanstack/react-query",
+  ],
 })

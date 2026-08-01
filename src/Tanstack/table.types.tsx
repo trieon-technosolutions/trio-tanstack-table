@@ -15,7 +15,12 @@ import {
 } from "@tanstack/react-table"
 import { TabsProps } from "antd"
 import type { MenuItemType } from "antd/es/menu/interface"
-import { ForwardedRef, RefObject } from "react"
+import type { AxiosInstance } from "axios"
+import { ForwardedRef, ReactNode, RefObject } from "react"
+import {
+  ServerExportPayload,
+  TableViewState,
+} from "~/shared/components/SavedViews"
 import { InternalTableProps } from "./InternalTable"
 export interface RHFCardConfig {
   columns?: string[]
@@ -163,7 +168,7 @@ export interface TableRef {
   // validateAllRows?: () => Promise<boolean>
 }
 
-export interface OptionConfig {
+export interface OptionConfig<T = any> {
   reload?:
     | boolean
     | {
@@ -177,6 +182,15 @@ export interface OptionConfig {
         placeholder?: string
       }
   reloadIcon?: React.ReactNode
+  /**
+   * Export control in the toolbar. Pass a config (items + onClick) and the table
+   * injects runtime context (table, selection, payload, apiClient) into each
+   * handler — the consumer decides what happens (formatting, download, API call).
+   * `true` renders the button shell with no items (a placeholder).
+   */
+  export?: boolean | TableActionConfig<T>
+  /** Generic config-driven toolbar actions (Import, Print, Bulk, Share…). */
+  actions?: TableActionConfig<T>[]
 }
 
 type PaginationType = "virtual" | "pagination" | "cursor"
@@ -188,9 +202,32 @@ export interface ColumnState {
   persistenceKey?: string
 }
 
+/**
+ * Wired callbacks the table hands to a Saved Views control. A custom control
+ * (backend-backed or otherwise) uses these to capture/restore/reset table state.
+ */
+export interface SavedViewsApi {
+  /** Stable identifier for this list (used as the storage/registry key). */
+  listKey: string
+  /** Serialize the current table state into a view snapshot. */
+  getViewState: () => TableViewState
+  /** Restore a saved snapshot (filters/sort/grouping/visibility + refetch). */
+  applyViewState: (state: TableViewState) => void
+  /** Clear back to the table's default state. */
+  resetViewState: () => void
+  /** True when the initial state came from the URL (control may skip auto-apply). */
+  hasInitialUrlState?: boolean
+}
+
 export interface SavedViewsOption {
   /** Stable identifier of this list page (saved views are stored per key per user) */
   listKey: string
+  /**
+   * Render your own Saved Views control (e.g. backend-backed). Receives the
+   * wired {@link SavedViewsApi}. When omitted, the package's built-in
+   * localStorage-based control is used.
+   */
+  render?: (api: SavedViewsApi) => ReactNode
 }
 
 export interface ServerExportOption {
@@ -200,12 +237,71 @@ export interface ServerExportOption {
   extraFilters?: Record<string, unknown>
 }
 
+/**
+ * Runtime context handed to every action handler. The table builds this and
+ * injects it — consumers never construct it.
+ */
+export interface TableActionContext<T> {
+  /** The full TanStack table instance (state, row models, columns, selection). */
+  table: Table<T>
+  /** Original row objects of the currently selected rows. */
+  selectedRows: T[]
+  /** Keys/ids of the currently selected rows. */
+  selectedKeys: React.Key[]
+  /** Builds the standard export payload (columns/filters/search/sort) from the
+   *  current table state. A convenience — ignore it if you only need rows. */
+  getPayload: () => ServerExportPayload
+  /** The consumer's Axios instance from TableConfigProvider, if present. */
+  apiClient?: AxiosInstance
+}
+
+/** A single action in a {@link TableActionConfig} (an antd-menuItem-like entry). */
+export interface ActionItem<T> {
+  key: string
+  label: ReactNode
+  icon?: ReactNode
+  /** Hide the item entirely (use for permission gating). */
+  hidden?: boolean
+  /** Disable the item; may depend on current context (e.g. no selection). */
+  disabled?: boolean | ((ctx: TableActionContext<T>) => boolean)
+  danger?: boolean
+  /** Do whatever you want on click. If it returns a Promise, the trigger shows
+   *  a loading spinner until it resolves. */
+  onClick?: (ctx: TableActionContext<T>) => void | Promise<void>
+}
+
+/**
+ * Config-driven toolbar action (Export, Import, Print, Bulk…). One item renders
+ * as a button; multiple render as a dropdown menu. The table injects the
+ * runtime {@link TableActionContext} at render.
+ */
+export interface TableActionConfig<T> {
+  /** Stable key for this action group. */
+  key?: string
+  items: ActionItem<T>[]
+  /** Fallback handler used when an item has no own `onClick`. */
+  onAction?: (item: ActionItem<T>, ctx: TableActionContext<T>) => void | Promise<void>
+  /** Trigger label (dropdown) — defaults to "Export" via the Export preset. */
+  label?: ReactNode
+  icon?: ReactNode
+  /** "auto" (default): button when 1 visible item, dropdown when >1. */
+  trigger?: "button" | "dropdown" | "auto"
+  /** Force loading state (overrides the auto-from-async-onClick behavior). */
+  loading?: boolean
+  disabled?: boolean
+  /** Full custom rendering; receives a `trigger(key?)` fn and `loading` flag. */
+  render?: (api: { trigger: (key?: string) => void; loading: boolean }) => ReactNode
+}
+
 export interface TanstackTableProps<T> extends OmittedInternalTableProps<T> {
   paginationType?: PaginationType
   pagination?: PaginationState
   /** Enables the per-user Saved Views control in the toolbar */
   savedViews?: SavedViewsOption
-  /** Enables the server-side "Export All" CSV button in the toolbar */
+  /**
+   * @deprecated Use `options.export` instead. This delegated to a host-provided
+   * export button and coupled the table to a backend `listKey` registry.
+   */
   serverExport?: ServerExportOption
   displayName?: string
   bordered?: boolean
@@ -242,7 +338,7 @@ export interface TanstackTableProps<T> extends OmittedInternalTableProps<T> {
   rowExpandable?: {
     onExpand: (selectedRowKeys: React.Key[], selectedRows: T[]) => void
   }
-  options?: OptionConfig | false
+  options?: OptionConfig<T> | false
   tableAlertOptionRender?: (
     selectedRowKeys: React.Key[],
     selectedRows: T[],

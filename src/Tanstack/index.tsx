@@ -1,4 +1,6 @@
 export * from "./TanstackTable"
+export * from "./TableAction"
+export * from "./LocalSavedViews"
 export * from "./InternalTable"
 export * from "./style"
 export * from "./tableComponents"

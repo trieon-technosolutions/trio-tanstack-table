@@ -538,6 +538,11 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
           <Flex vertical gap={8} flex={1} style={{ minWidth: 200, padding: 8 }}>
             <EText color={token.neutral8}>Fixed to Left</EText>
 
+            <Flex
+              vertical
+              gap={8}
+              style={{ maxHeight: 320, overflowY: "auto" }}
+            >
             {leftColumns.map((column: any) => {
               return (
                 <Flex key={column.id} gap={8}>
@@ -605,6 +610,7 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
                 </Flex>
               )
             })}
+            </Flex>
           </Flex>
         )}
 
@@ -627,6 +633,11 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
               }}
             >
               <SortableContext items={unPinnedColumns}>
+                <Flex
+                  vertical
+                  gap={8}
+                  style={{ maxHeight: 320, overflowY: "auto" }}
+                >
                 {unPinnedColumns?.map((column: any) => {
                   return (
                     <SortableColumns
@@ -682,6 +693,7 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
                     </SortableColumns>
                   )
                 })}
+                </Flex>
               </SortableContext>
             </DndContext>
           </Flex>
@@ -692,6 +704,11 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
           <Flex vertical gap={8} flex={1} style={{ minWidth: 200, padding: 8 }}>
             <EText>Fixed to right</EText>
 
+            <Flex
+              vertical
+              gap={8}
+              style={{ maxHeight: 320, overflowY: "auto" }}
+            >
             {rightColumns.map((column: any) => {
               return (
                 <Flex key={column.id} gap={8}>
@@ -754,6 +771,7 @@ export const ColumnDropDown = <T,>(table: ColumnDropDownProps<T>) => {
                 </Flex>
               )
             })}
+            </Flex>
           </Flex>
         )}
       </>

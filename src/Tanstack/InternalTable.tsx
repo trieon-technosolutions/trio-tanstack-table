@@ -17,7 +17,9 @@ import {
   CSSProperties,
   forwardRef,
   Fragment,
+  isValidElement,
   memo,
+  ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -45,6 +47,73 @@ import {
 import { TableInput, TableInputFieldTypes } from "./tableInput";
 import { getCellSize } from "./tableUtils";
 
+/**
+ * Consumer-overridable inline styles for the table's structural slots. Each is
+ * merged AFTER the package's computed inline styles, so consumer values win.
+ */
+export interface TableStyleSlots {
+  /** `<thead>` container. Note: header CELLS paint over this, so for a visible
+   *  header background/text change use `headerCell` instead. */
+  header?: CSSProperties;
+  /** Header `<th>` cells — the effective way to restyle the header's look. */
+  headerCell?: CSSProperties;
+  /** `<tbody>` container. */
+  tableBody?: CSSProperties;
+  /** Data `<tr>` rows (not group-header rows). */
+  rows?: CSSProperties;
+  /** Data `<td>` body cells. */
+  bodyCell?: CSSProperties;
+  /** `<tfoot>` container. */
+  footer?: CSSProperties;
+  /** Group-header `<tr>` rows. */
+  groupRow?: CSSProperties;
+}
+
+/**
+ * Consumer-supplied CSS class names for the table's structural slots. Appended
+ * to (not replacing) the package's own classes, so your CSS/Tailwind can target
+ * each slot.
+ */
+export interface TableClassNameSlots {
+  /** `<thead>` container. */
+  header?: string;
+  /** Header `<th>` cells. */
+  headerCell?: string;
+  /** `<tbody>` container. */
+  tableBody?: string;
+  /** Data `<tr>` rows. */
+  rows?: string;
+  /** Data `<td>` body cells. */
+  bodyCell?: string;
+  /** `<tfoot>` container. */
+  footer?: string;
+  /** Group-header `<tr>` rows. */
+  groupRow?: string;
+}
+
+/** Join class names, dropping falsy values. */
+const cx = (...classes: Array<string | undefined | false>): string =>
+  classes.filter(Boolean).join(" ");
+
+/** Context passed to a consumer's custom group-header renderer. */
+export interface GroupHeaderRenderCtx<T> {
+  /** The grouped value for this header (raw). */
+  groupValue: unknown;
+  /** The column being grouped by, if resolvable. */
+  column?: Column<T, unknown>;
+  /** The TanStack group row. */
+  row: Row<T>;
+  /** Item count for the group (server summary when available). */
+  count: number;
+  /** Optional financial total for the group, when provided by group summary. */
+  total?: string;
+}
+
+/** Consumer-configurable empty state: a node, or text/render options. */
+export type EmptyStateConfig =
+  | ReactNode
+  | { text?: string; render?: () => ReactNode };
+
 export interface InternalTableProps<T> {
   table: Table<T>;
   loading?: boolean;
@@ -57,6 +126,20 @@ export interface InternalTableProps<T> {
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
   useViewportHeight?: boolean;
+  /** Per-slot inline style overrides for header/body/rows/footer/group rows. */
+  style?: TableStyleSlots;
+  /** Per-slot CSS class names, appended to the package's own classes. */
+  classNames?: TableClassNameSlots;
+  /**
+   * Custom renderer for the group-header content. When omitted, the group cell
+   * reuses the grouping column's own cell renderer (falling back to the raw
+   * value). Return the full node to display after the ordinal badge.
+   */
+  groupHeaderRender?: (ctx: GroupHeaderRenderCtx<T>) => ReactNode;
+  /** Overrides the default empty state shown when there are no rows. */
+  emptyState?: EmptyStateConfig;
+  /** Fixed height (px) applied to data rows. */
+  rowHeight?: number;
 }
 
 const HIGHLIGHT_PRESETS = {
@@ -105,6 +188,7 @@ const getCommonPinningStyles = (
   column: Column<any>,
   isRow: boolean,
   isRowSelected: boolean,
+  token: any,
 ): CSSProperties => {
   // note : https://github.com/TanStack/table/issues/5397 pinned group header issue
 
@@ -135,7 +219,7 @@ const getCommonPinningStyles = (
     backgroundColor: isPinned
       ? isRow && isRowSelected
         ? "inherit"
-        : "#F9FAFB"
+        : token?.colorBgContainer
       : undefined,
     zIndex: isPinned ? (isRow ? 1 : 10) : undefined,
     overflow: "hidden",
@@ -166,6 +250,11 @@ export const InternalTable = <T,>({
   isFetchingNextPage,
   onLoadMore,
   useViewportHeight = false,
+  style: styleOverrides,
+  classNames: classNameOverrides,
+  groupHeaderRender,
+  emptyState,
+  rowHeight,
 }: InternalTableProps<T>) => {
   const token = useAppTheme();
   const layoutVersion = [
@@ -266,7 +355,10 @@ export const InternalTable = <T,>({
         >
           {/* note TABLE HEADER */}
 
-          <ShadcnTableHeader style={{ zIndex: 50 }}>
+          <ShadcnTableHeader
+            className={classNameOverrides?.header}
+            style={{ zIndex: 50, ...styleOverrides?.header }}
+          >
             {table?.getHeaderGroups()?.map((headerGroup) => {
               return (
                 <ShadcnTableRow key={headerGroup.id}>
@@ -280,6 +372,7 @@ export const InternalTable = <T,>({
                             header.column,
                             false,
                             false,
+                            token,
                           ),
                           width: `calc(var(--header-${header?.id}-size) * 1px)`,
                           minWidth: header.column.getSize(),
@@ -300,12 +393,17 @@ export const InternalTable = <T,>({
                           ...(headerIndex === 0
                             ? { borderLeft: `1px solid ${token.neutral4}` }
                             : {}),
+                          // Consumer header-cell override wins over the computed
+                          // styles above (pinned cells still keep their sticky
+                          // offsets from getCommonPinningStyles).
+                          ...styleOverrides?.headerCell,
                         }}
-                        className={
+                        className={cx(
                           isUtilityColumn(header.column.id)
                             ? "px-0 text-center"
-                            : "px-3"
-                        }
+                            : "px-3",
+                          classNameOverrides?.headerCell,
+                        )}
                       >
                         {header?.isPlaceholder ? null : (
                           <div
@@ -408,6 +506,10 @@ export const InternalTable = <T,>({
               bordered={bordered}
               onRow={onRow}
               layoutVersion={layoutVersion}
+              style={styleOverrides}
+              classNames={classNameOverrides}
+              rowHeight={rowHeight}
+              groupHeaderRender={groupHeaderRender}
             />
           ) : (
             <VirtualTableBody
@@ -418,6 +520,10 @@ export const InternalTable = <T,>({
               onRow={onRow}
               layoutVersion={layoutVersion}
               measureElement={rowVirtualizer.measureElement}
+              style={styleOverrides}
+              classNames={classNameOverrides}
+              rowHeight={rowHeight}
+              groupHeaderRender={groupHeaderRender}
             />
           )}
 
@@ -427,7 +533,10 @@ export const InternalTable = <T,>({
             .getFlatHeaders()
             ?.flatMap((header) => header?.column?.columnDef?.footer)
             .filter(Boolean).length > 0 && (
-            <ShadcnTableFooter className="sticky bottom-0 z-30">
+            <ShadcnTableFooter
+              className={cx("sticky bottom-0 z-30", classNameOverrides?.footer)}
+              style={styleOverrides?.footer}
+            >
               {table.getFooterGroups().map((footerGroup) => {
                 return (
                   <ShadcnTableRow key={footerGroup.id}>
@@ -440,7 +549,7 @@ export const InternalTable = <T,>({
                           style={{
                             position: "sticky",
                             bottom: 0,
-                            backgroundColor: "#fff",
+                            backgroundColor: token.colorBgContainer,
                             textAlign: footerAlign || undefined,
                           }}
                         >
@@ -491,11 +600,33 @@ export const InternalTable = <T,>({
         </ShadcnTableRow> */}
       {!loading && table?.getFilteredRowModel().rows.length === 0 && (
         <Flex flex={1} justify="center" align="center">
-          <TanstackTableEmpty />
+          {resolveEmptyState(emptyState)}
         </Flex>
       )}
     </>
   );
+};
+
+/**
+ * Resolve the consumer's `emptyState` override to a node, falling back to the
+ * package default. Accepts a ReactNode directly, or a `{ text, render }` object
+ * where `render` takes precedence over `text`.
+ */
+const resolveEmptyState = (emptyState?: EmptyStateConfig): ReactNode => {
+  if (emptyState === undefined || emptyState === null) {
+    return <TanstackTableEmpty />;
+  }
+  if (
+    typeof emptyState === "object" &&
+    !isValidElement(emptyState) &&
+    ("text" in emptyState || "render" in emptyState)
+  ) {
+    const opts = emptyState as { text?: string; render?: () => ReactNode };
+    if (opts.render) return opts.render();
+    if (opts.text !== undefined) return <EText>{opts.text}</EText>;
+    return <TanstackTableEmpty />;
+  }
+  return emptyState as ReactNode;
 };
 
 interface TableBodyProps<T> extends InternalTableProps<T> {
@@ -510,9 +641,18 @@ export const TableBody = <T,>({
   bordered,
   onRow,
   layoutVersion = "",
+  style: styleOverrides,
+  classNames: classNameOverrides,
+  rowHeight,
+  groupHeaderRender,
 }: TableBodyProps<T>) => {
+  const token = useAppTheme();
   return (
-    <ShadcnTableBody tabIndex={-1} className={`p-0 ${bordered}`}>
+    <ShadcnTableBody
+      tabIndex={-1}
+      className={cx(`p-0 ${bordered}`, classNameOverrides?.tableBody)}
+      style={styleOverrides?.tableBody}
+    >
       {table?.getRowModel().rows.map((row: Row<T>, index) => {
         return (
           <Fragment key={`${row.id}-${layoutVersion}`}>
@@ -524,6 +664,14 @@ export const TableBody = <T,>({
               table={table}
               bordered={bordered}
               layoutVersion={layoutVersion}
+              rowStyle={styleOverrides?.rows}
+              groupRowStyle={styleOverrides?.groupRow}
+              cellStyle={styleOverrides?.bodyCell}
+              rowClassName={classNameOverrides?.rows}
+              groupRowClassName={classNameOverrides?.groupRow}
+              cellClassName={classNameOverrides?.bodyCell}
+              rowHeight={rowHeight}
+              groupHeaderRender={groupHeaderRender}
             />
             {/* If the row is expanded (for non-grouped rows), render custom expansion content */}
             {row.getIsExpanded() &&
@@ -533,7 +681,7 @@ export const TableBody = <T,>({
                   <ShadcnTableCell
                     colSpan={row.getAllCells().length}
                     style={{
-                      backgroundColor: "#f5f5f5",
+                      backgroundColor: token.colorFillAlter,
                       padding: "16px",
                       textAlign: "center",
                     }}
@@ -556,13 +704,21 @@ export const VirtualTableBody = <T,>({
   onRow,
   measureElement,
   layoutVersion = "",
+  style: styleOverrides,
+  classNames: classNameOverrides,
+  rowHeight,
+  groupHeaderRender,
 }: TableBodyProps<T> & { measureElement: (el: Element | null) => void }) => {
+  const token = useAppTheme();
   const paddingTop = data && data?.length > 0 ? data[0].start || 0 : 0;
   const paddingBottom =
     data && data?.length > 0 ? totalSize - (data?.at(-1)?.end || 0) : 0;
 
   return (
-    <ShadcnTableBody className={`p-0 ${bordered}`}>
+    <ShadcnTableBody
+      className={cx(`p-0 ${bordered}`, classNameOverrides?.tableBody)}
+      style={styleOverrides?.tableBody}
+    >
       {paddingTop ? (
         <ShadcnTableRow
           style={{
@@ -586,6 +742,14 @@ export const VirtualTableBody = <T,>({
               table={table}
               bordered={bordered}
               layoutVersion={layoutVersion}
+              rowStyle={styleOverrides?.rows}
+              groupRowStyle={styleOverrides?.groupRow}
+              cellStyle={styleOverrides?.bodyCell}
+              rowClassName={classNameOverrides?.rows}
+              groupRowClassName={classNameOverrides?.groupRow}
+              cellClassName={classNameOverrides?.bodyCell}
+              rowHeight={rowHeight}
+              groupHeaderRender={groupHeaderRender}
               ref={(el) => measureElement(el)}
             />
 
@@ -597,7 +761,7 @@ export const VirtualTableBody = <T,>({
                   <ShadcnTableCell
                     colSpan={row.getAllCells().length}
                     style={{
-                      backgroundColor: "#f5f5f5",
+                      backgroundColor: token.colorFillAlter,
                       padding: "16px",
                       textAlign: "center",
                     }}
@@ -633,8 +797,10 @@ export const MemoizedCell: React.FC<{
   isPinning: boolean;
   isRowSelected: boolean;
   layoutVersion?: string;
+  cellStyle?: CSSProperties;
+  cellClassName?: string;
 }> = memo(
-  ({ cell, token, table, bordered, isRowSelected }) => {
+  ({ cell, token, table, bordered, isRowSelected, cellStyle, cellClassName }) => {
     // Track both editing state and value
     const [isEditing, setIsEditing] = useState(false);
     const [localValue, setLocalValue] = useState(cell.getValue());
@@ -667,7 +833,7 @@ export const MemoizedCell: React.FC<{
         <ShadcnTableCell
           tabIndex={-1}
           style={{
-            ...getCommonPinningStyles(cell.column, true, isRowSelected),
+            ...getCommonPinningStyles(cell.column, true, isRowSelected, token),
             width: cell.column.getSize(),
             minWidth: cell.column.getSize(),
             maxWidth: cell.column.getSize(),
@@ -675,12 +841,18 @@ export const MemoizedCell: React.FC<{
             color: token.neutral9,
             ...(cellAlign ? { textAlign: cellAlign } : {}),
             ...highlightStyles,
+            // Consumer body-cell override (highlight meta still wins if set
+            // per-column, since it is applied after via highlightStyles above —
+            // here cellStyle takes final precedence for a global look).
+            ...cellStyle,
           }}
-          className={`${
+          className={cx(
             isUtilityColumn(cell.column.id)
               ? `${getCellSize(table.getState()?.density)} px-0 text-center`
-              : `${getCellSize(table.getState()?.density)} px-3`
-          } ${bordered}`}
+              : `${getCellSize(table.getState()?.density)} px-3`,
+            `${bordered}`,
+            cellClassName,
+          )}
           key={cell.id}
         >
           {![
@@ -741,19 +913,22 @@ export const MemoizedCell: React.FC<{
     return (
       <ShadcnTableCell
         style={{
-          ...getCommonPinningStyles(cell.column, true, isRowSelected),
+          ...getCommonPinningStyles(cell.column, true, isRowSelected, token),
           width: cell.column.getSize(),
           minWidth: cell.column.getSize(),
           maxWidth: cell.column.getSize(),
           fontWeight: 400,
           color: token.neutral9,
           ...(editCellAlign ? { textAlign: editCellAlign } : {}),
+          ...cellStyle,
         }}
-        className={`${
+        className={cx(
           isUtilityColumn(cell.column.id)
             ? `${getCellSize(table.getState()?.density)} px-0 text-center`
-            : `${getCellSize(table.getState()?.density)} px-3`
-        } ${bordered}`}
+            : `${getCellSize(table.getState()?.density)} px-3`,
+          `${bordered}`,
+          cellClassName,
+        )}
         key={cell.id}
       >
         <TableInput
@@ -813,10 +988,34 @@ export const EditableRow = memo(
       layoutVersion?: string;
       data?: any[];
       height?: number;
+      rowStyle?: CSSProperties;
+      groupRowStyle?: CSSProperties;
+      cellStyle?: CSSProperties;
+      rowClassName?: string;
+      groupRowClassName?: string;
+      cellClassName?: string;
+      rowHeight?: number;
+      groupHeaderRender?: (ctx: GroupHeaderRenderCtx<any>) => ReactNode;
     }
   >(
     (
-      { index, row, isSelected, onRow, table, bordered, layoutVersion = "" },
+      {
+        index,
+        row,
+        isSelected,
+        onRow,
+        table,
+        bordered,
+        layoutVersion = "",
+        rowStyle,
+        groupRowStyle,
+        cellStyle,
+        rowClassName,
+        groupRowClassName,
+        cellClassName,
+        rowHeight,
+        groupHeaderRender,
+      },
       ref,
     ) => {
       const token = useAppTheme();
@@ -896,6 +1095,48 @@ export const EditableRow = memo(
         }
         const displayCount = summaryCount ?? row.subRows.length;
 
+        // Group value display: reuse the grouping column's OWN cell renderer so
+        // the header shows the same formatted value the column shows in normal
+        // rows (e.g. a formatted date instead of a raw ISO string). Resolution:
+        //   1. `groupHeaderRender` override, if provided.
+        //   2. the grouping column's `columnDef.cell` via flexRender.
+        //   3. raw String fallback (also used for blank values).
+        // Note: a `cell` that reads `row.original` gets `undefined` on a group
+        // row; consumers whose cell assumes a full record should use
+        // `groupHeaderRender`.
+        const groupColumn = groupingColumnId
+          ? table.getColumn(groupingColumnId)
+          : undefined;
+        const groupCell = groupingColumnId
+          ? row
+              .getVisibleCells()
+              .find((c) => c.column.id === groupingColumnId)
+          : undefined;
+
+        let groupContent: ReactNode;
+        if (groupHeaderRender) {
+          groupContent = groupHeaderRender({
+            groupValue,
+            column: groupColumn as Column<any> | undefined,
+            row,
+            count: displayCount,
+            total: summaryTotal,
+          });
+        } else if (groupValue === null || groupValue === undefined) {
+          groupContent = "(Blank)";
+        } else if (groupCell?.column.columnDef.cell) {
+          try {
+            groupContent = flexRender(
+              groupCell.column.columnDef.cell,
+              groupCell.getContext(),
+            );
+          } catch {
+            groupContent = String(groupValue);
+          }
+        } else {
+          groupContent = String(groupValue);
+        }
+
         return (
           <ShadcnTableRow
             data-index={index}
@@ -903,18 +1144,23 @@ export const EditableRow = memo(
             key={row?.id}
             id={`row-${row.id}`}
             ref={ref}
+            className={groupRowClassName}
             onClick={() => row.getToggleExpandedHandler()?.()}
             style={{
               width: "100%",
               cursor: row.getCanExpand() ? "pointer" : "default",
 
+              // Lighter brand tint (was the loud full-strength primary5) so the
+              // group bar reads as a header without overpowering the data rows.
               backgroundColor:
-                groupingLevel === 0 ? token.primary5 : token.neutral2,
+                groupingLevel === 0 ? token.primary1 : token.neutral2,
               borderTop: `1px solid ${token.neutral5}`,
               borderBottom: `1px solid ${token.neutral5}`,
               // Subtle ERP-style left accent bar to set group headers apart from
               // detail rows without being loud (inset shadow = no layout shift).
-              boxShadow: `inset 3px 0 0 0 ${token.primary6}`,
+              boxShadow: `inset 3px 0 0 0 ${token.primary5}`,
+              // Consumer override wins over the computed defaults above.
+              ...groupRowStyle,
             }}
           >
             <ShadcnTableCell
@@ -978,9 +1224,7 @@ export const EditableRow = memo(
                     : ""}
                 </EText>
                 <EText fontWeight="700" color={token.neutral10}>
-                  {groupValue === null || groupValue === undefined
-                    ? "(Blank)"
-                    : String(groupValue)}
+                  {groupContent}
                 </EText>
 
                 <span
@@ -1030,10 +1274,14 @@ export const EditableRow = memo(
             key={row?.id}
             id={`row-${row.id}`}
             ref={ref}
+            className={rowClassName}
             style={{
               width: "100%",
               backgroundColor: isSelected ? token.neutral4 : undefined,
               borderBottom: `1px solid ${token.primary1}`,
+              ...(rowHeight !== undefined ? { height: rowHeight } : {}),
+              // Consumer row-style override wins over the computed defaults.
+              ...rowStyle,
             }}
           >
             {row?.getVisibleCells().map((cell: any) => {
@@ -1047,6 +1295,8 @@ export const EditableRow = memo(
                   isPinning={cell.column.getIsPinned()}
                   isRowSelected={isSelected}
                   layoutVersion={layoutVersion}
+                  cellStyle={cellStyle}
+                  cellClassName={cellClassName}
                 />
               );
             })}

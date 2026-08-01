@@ -20,11 +20,52 @@ const columns = [
 ];
 ```
 
-Users can click the grouping button in the toolbar to collapse and group rows by any groupable column.
+Users can click the grouping button in the toolbar to collapse and group rows by any groupable column. The Group By dropdown scrolls when the column list is long.
 
 ---
 
-## 2. Server-Side Group Summaries
+## 2. Group Header Content
+
+By default, the group-header row **reuses the grouping column's own `cell` renderer**, so a grouped value looks exactly like it does in normal rows. For example, a grouped date column shows the formatted `31 Jul, 2026` instead of a raw ISO string — no extra config needed, as long as the column has a `cell` (or a `meta.valueType`).
+
+To take full control of the group header, pass `groupHeaderRender`:
+
+```tsx
+<NoobTanstackTable
+  columns={columns}
+  groupHeaderRender={({ groupValue, column, row, count, total }) => (
+    <strong>
+      {String(groupValue)} — {count} items
+      {total ? ` · ₹${total}` : ""}
+    </strong>
+  )}
+/>
+```
+
+| `ctx` field | Description |
+| :--- | :--- |
+| `groupValue` | The raw value the rows are grouped by. |
+| `column` | The grouping column (if resolvable). |
+| `row` | The TanStack group row. |
+| `count` | Item count (server summary when available). |
+| `total` | Optional financial total for the group. |
+
+> If a column's `cell` reads `row.original` (which is `undefined` on a group row), use `groupHeaderRender` for that column to avoid errors.
+
+### Styling the group row
+
+The group-header row is theme-tinted (from your Ant Design `colorPrimary`) and can be overridden per-slot:
+
+```tsx
+<NoobTanstackTable
+  style={{ groupRow: { backgroundColor: "#eef2ff" } }}
+  classNames={{ groupRow: "my-group-header" }}
+/>
+```
+
+---
+
+## 3. Server-Side Group Summaries
 
 When grouping is active, the table calls the `groupSummaryRequest` callback. This fetches accurate row counts and financial totals (e.g. sum of debits/credits) directly from the backend for the current grouped set.
 
@@ -56,7 +97,7 @@ When grouping is active, the table calls the `groupSummaryRequest` callback. Thi
 
 ---
 
-## 3. Grand Totals (Sticky Footers)
+## 4. Grand Totals (Sticky Footers)
 
 You can display backend-computed grand totals in a sticky table footer that remains visible at the bottom of the table.
 

@@ -250,23 +250,29 @@ export const GroupByDropDown = <T,>({
             >
               AVAILABLE COLUMNS
             </EText>
-            {availableColumns.map((column) => (
-              <Flex
-                key={column.id}
-                gap={8}
-                align="center"
-                onClick={() => handleAddToGrouping(column.id)}
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                }}
-                className="group-by-available-row"
-              >
-                <Checkbox checked={false} />
-                <EText color={token.neutral8}>{column.columnDef.header as any}</EText>
-              </Flex>
-            ))}
+            {/* Cap the list height so a long column set scrolls instead of
+                overflowing the viewport; the label above stays pinned. */}
+            <Flex vertical gap={4} style={{ maxHeight: 320, overflowY: "auto" }}>
+              {availableColumns.map((column) => (
+                <Flex
+                  key={column.id}
+                  gap={8}
+                  align="center"
+                  onClick={() => handleAddToGrouping(column.id)}
+                  style={{
+                    padding: "6px 8px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                  className="group-by-available-row"
+                >
+                  <Checkbox checked={false} />
+                  <EText color={token.neutral8}>
+                    {column.columnDef.header as any}
+                  </EText>
+                </Flex>
+              ))}
+            </Flex>
           </Flex>
         )}
 
