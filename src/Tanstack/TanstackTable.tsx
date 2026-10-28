@@ -1,3 +1,4 @@
+import { ShadcnFilterButton } from "../ProComponents/FilterLayout";
 /* eslint-disable no-unsafe-optional-chaining */
 /* eslint-disable react/display-name */
 import { ReloadOutlined } from "@ant-design/icons";
@@ -24,6 +25,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 import {
+  useDebounceFn,
   useInfiniteScroll,
   useRequest,
   useSafeState,
@@ -75,7 +77,7 @@ import {
 import { useTableUrlSync } from "./useTableUrlSync";
 import { useTanstackTable } from "./useTanstackTable";
 
-import { debounce, isArray } from "lodash";
+import { isArray } from "lodash";
 
 dayjs.extend(isBetween);
 
@@ -555,7 +557,7 @@ const NoobTanstackTable = forwardRef(
       );
     };
 
-    const debouncedGlobalFilter = debounce((value) => {
+    const { run: debouncedGlobalFilter } = useDebounceFn((value) => {
       setGlobalTextSearch(value);
       if (manualFiltering) {
         if (!isInfinite) {
@@ -573,7 +575,7 @@ const NoobTanstackTable = forwardRef(
         syncGlobalSearchToUrl(value);
       }
       tableProps?.onGlobalFilterChange?.(value);
-    }, 500);
+    }, { wait: 500 });
 
     const memoizedColumn: Array<ColumnDef<T, any>> = useMemo(() => {
       return [...extraColumns, indexColumn, ...(columns ?? [])] as Array<
@@ -602,6 +604,8 @@ const NoobTanstackTable = forwardRef(
         ? persistedSizing
         : fallbackSizing;
     });
+
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const [searchParams, setSearchParams] = useState<Record<string, unknown>>(
       urlSyncEnabled ? initialUrlSearchParams : {},
@@ -988,6 +992,7 @@ const NoobTanstackTable = forwardRef(
         debouncedGlobalFilter(value);
       },
       meta: {
+        openFilters: () => setFiltersOpen(true),
         reload: () => {
           if (isInfinite) {
             infiniteReload();
@@ -1282,7 +1287,9 @@ const NoobTanstackTable = forwardRef(
       setColumnSizing(defaultSizing);
       if (columnsState?.persistenceKey) {
         localStorage.removeItem(`${columnsState.persistenceKey}-column-order`);
-        localStorage.removeItem(`${columnsState.persistenceKey}-column-pinning`);
+        localStorage.removeItem(
+          `${columnsState.persistenceKey}-column-pinning`,
+        );
         localStorage.removeItem(`${columnsState.persistenceKey}-column-sizing`);
       }
 
@@ -1351,23 +1358,23 @@ const NoobTanstackTable = forwardRef(
     const stateToolbarActions = [
       savedViews && manualFiltering ? (
         <React.Fragment key="saved-views">
-          {savedViews.render
-            ? savedViews.render({
-                listKey: savedViews.listKey,
-                getViewState,
-                applyViewState,
-                resetViewState,
-                hasInitialUrlState,
-              })
-            : (
-                <LocalSavedViews
-                  listKey={savedViews.listKey}
-                  getViewState={getViewState}
-                  applyViewState={applyViewState}
-                  resetViewState={resetViewState}
-                  hasInitialUrlState={hasInitialUrlState}
-                />
-              )}
+          {savedViews.render ? (
+            savedViews.render({
+              listKey: savedViews.listKey,
+              getViewState,
+              applyViewState,
+              resetViewState,
+              hasInitialUrlState,
+            })
+          ) : (
+            <LocalSavedViews
+              listKey={savedViews.listKey}
+              getViewState={getViewState}
+              applyViewState={applyViewState}
+              resetViewState={resetViewState}
+              hasInitialUrlState={hasInitialUrlState}
+            />
+          )}
         </React.Fragment>
       ) : undefined,
       serverExport && manualFiltering ? (
@@ -1415,7 +1422,10 @@ const NoobTanstackTable = forwardRef(
 
     return (
       <>
-        <div tabIndex={-1}>
+        <div tabIndex={-1} className="trio-tanstack-table">
+          {manualFiltering && (
+            <TanstackFilter table={table} open={filtersOpen} onOpenChange={setFiltersOpen} />
+          )}
           {/* note toolbar */}
           <TanstackToolbar
             ref={ref}
@@ -1428,13 +1438,13 @@ const NoobTanstackTable = forwardRef(
                     ...toolbar.actions,
                     ...stateToolbarActions,
                     manualFiltering ? (
-                      <TanstackFilter table={table} key="filter" />
+                      <ShadcnFilterButton key="filter" onClick={() => setFiltersOpen(true)} />
                     ) : undefined,
                   ]
                 : [
                     ...stateToolbarActions,
                     manualFiltering ? (
-                      <TanstackFilter table={table} key="filter" />
+                      <ShadcnFilterButton key="filter" onClick={() => setFiltersOpen(true)} />
                     ) : undefined,
                   ]),
               tableOptions?.reload && (
@@ -1444,7 +1454,7 @@ const NoobTanstackTable = forwardRef(
                     if (tableOptions?.reload?.onClick) {
                       tableOptions.reload.onClick();
                     } else {
-                      refresh();
+                      table.options.meta?.reload();
                     }
                   }}
                   key="reload"

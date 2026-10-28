@@ -96,6 +96,7 @@ export interface DataProps {
 }
 
 export interface CustomTableMeta {
+  openFilters?: () => void
   /** Server group summary: key = JSON.stringify(group value path as strings) */
   groupSummary?: Map<string, GroupSummaryEntry>
   /** Backend grand totals for the full filtered set — read by column footers. */

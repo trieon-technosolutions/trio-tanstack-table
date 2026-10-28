@@ -80,6 +80,7 @@ import {
   PAGINATION_PAGE_SIZE_OPTIONS,
 } from "./tableConstant"
 import { TableInput, TableInputFieldTypes } from "./tableInput"
+import { hasFilterValue } from "./filter-values"
 import { handlePinColumn, isCheckAll, isIndeterminate } from "./tableUtils"
 
 import { EButton, TableClearButton } from "../ProComponents/Button"
@@ -123,40 +124,24 @@ export const FilterDropDown = ({
     setAllListValues(sortedUniqueValues.filter((item) => item))
   }, [sortedUniqueValues])
 
-  const isFilterApplied = Object.keys(
-    table?.getState()?.searchParams ?? {},
-  ).includes(column.columnDef.id ?? "")
+  const isFilterApplied = hasFilterValue(table.getState().searchParams?.[column.id])
 
   if (manualFiltering) {
-    return isFilterApplied ? (
-      <>
-        {filterVariant === "search" ? (
-          <IconZoomExclamation
-            size={16}
-            style={{
-              marginTop: 3,
-              marginRight: 2,
-              marginLeft: 12,
-              fontWeight: 500,
-              color: token.info7,
-            }}
-          />
-        ) : (
-          <FilterOutlined
-            onClick={(e) => {
-              e.stopPropagation()
-              searchInputRef.current?.focus()
-            }}
-            style={{
-              marginRight: 2,
-              marginLeft: 12,
-              fontWeight: 500,
-              color: token.info7,
-            }}
-          />
-        )}
-      </>
-    ) : undefined
+    return (
+      <EButton
+        type="text"
+        size="small"
+        aria-label={`Filter ${typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}`}
+        aria-haspopup="dialog"
+        title={isFilterApplied ? "Edit active filter" : "Add filter"}
+        onClick={(event) => {
+          event.stopPropagation()
+          table.options.meta?.openFilters?.()
+        }}
+        style={{ color: isFilterApplied ? token.info7 : token.neutral7 }}
+        icon={<FilterOutlined />}
+      />
+    )
   }
 
   const items = [
@@ -1141,7 +1126,7 @@ export const TanstackTablePagination = <T,>({
             tabIndex={-1}
             max={pageCount}
             min={1}
-            defaultValue={table.getState().pagination.pageIndex + 1}
+            value={table.getState().pagination.pageIndex + 1}
             onChange={(e) => {
               const page = e ? Number(e) - 1 : 0
               table.setPageIndex(page)
@@ -1521,12 +1506,20 @@ export const TanstackGlobalFilter = forwardRef<
   )
 })
 
-export const TanstackFilter = ({ table }: { table: Table<any> }) => {
+export const TanstackFilter = ({ table, open, onOpenChange }: {
+  table: Table<any>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) => {
   const [filterParams, setFilterParams] = useState({})
   const [form] = Form.useForm()
 
+  useEffect(() => {
+    if (open) setFilterParams(table.getState().columnFilters)
+  }, [open, table])
+
   const allColumns = table
-    ?.getAllColumns()
+    ?.getAllLeafColumns()
     ?.filter((column) => column.getCanFilter())
 
   const initialValues = useMemo(() => {
@@ -1535,6 +1528,13 @@ export const TanstackFilter = ({ table }: { table: Table<any> }) => {
 
   return (
     <FilterProDrawerForm
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) setFilterParams(table.getState().columnFilters)
+        onOpenChange?.(nextOpen)
+      }}
+      {...(open !== undefined ? { trigger: undefined } : {})}
+      drawerProps={{ className: "trio-tanstack-table" }}
       form={form}
       initialValues={{ ...initialValues }}
       onReset={() => {
@@ -1543,7 +1543,6 @@ export const TanstackFilter = ({ table }: { table: Table<any> }) => {
         setFilterParams({})
       }}
       onFinish={async (values) => {
-        console.log(filterParams, "values")
         table.options.meta?.onSearchParamsChange?.(values)
         table.options?.onColumnFiltersChange?.(
           filterParams as ColumnFiltersState,

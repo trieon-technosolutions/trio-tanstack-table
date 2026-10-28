@@ -27,7 +27,7 @@ export const EText: React.FC<TextTypographyProps> = ({
   children,
   fontWeight = "400",
   textAlign = "left",
-  fontSize = "14px",
+  fontSize = "inherit",
   color,
   ...rest
 }) => {
@@ -75,7 +75,7 @@ export const EParagraph: React.FC<ParagraphTypographyProps> = ({
       {...rest}
       style={{
         color,
-        fontSize: "14px",
+        fontSize: "inherit",
         fontWeight,
         textAlign,
         ...rest.style,
@@ -147,7 +147,7 @@ export const ELink: React.FC<LinkTypographyProps> = ({
   children,
   fontWeight = "400",
   textAlign = "left",
-  fontSize = "14px",
+  fontSize = "inherit",
   color,
   linkColor,
   onClick,

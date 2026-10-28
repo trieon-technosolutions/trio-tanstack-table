@@ -216,7 +216,7 @@ const getCommonPinningStyles = (
     width: columnWidth,
     minWidth: columnWidth,
     maxWidth: columnWidth,
-    backgroundColor: isPinned
+    backgroundColor: !isRow || isPinned
       ? isRow && isRowSelected
         ? "inherit"
         : token?.colorBgContainer
@@ -357,7 +357,13 @@ export const InternalTable = <T,>({
 
           <ShadcnTableHeader
             className={classNameOverrides?.header}
-            style={{ zIndex: 50, ...styleOverrides?.header }}
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 50,
+              backgroundColor: token.colorBgContainer,
+              ...styleOverrides?.header,
+            }}
           >
             {table?.getHeaderGroups()?.map((headerGroup) => {
               return (
@@ -527,6 +533,29 @@ export const InternalTable = <T,>({
             />
           )}
 
+          {/* note TABLE LOADING STATE */}
+          {loading && (
+            <ShadcnTableBody>
+              {[...Array(tableLoadingRowCount)]
+                .map((_, index) => ({
+                  key: `key${index}`,
+                }))
+                ?.map((item) => {
+                  return (
+                    <ShadcnTableRow key={item.key}>
+                      {table?.getAllColumns()?.map((column) => {
+                        return (
+                          <ShadcnTableCell className="p-3" key={column.id}>
+                            <Skeleton active title paragraph={false} />
+                          </ShadcnTableCell>
+                        );
+                      })}
+                    </ShadcnTableRow>
+                  );
+                })}
+            </ShadcnTableBody>
+          )}
+
           {/* note Table Footer — sticky to the bottom of the scroll area so the
               summary/grand-total row stays visible while scrolling. */}
           {table
@@ -535,7 +564,13 @@ export const InternalTable = <T,>({
             .filter(Boolean).length > 0 && (
             <ShadcnTableFooter
               className={cx("sticky bottom-0 z-30", classNameOverrides?.footer)}
-              style={styleOverrides?.footer}
+              style={{
+                position: "sticky",
+                bottom: 0,
+                zIndex: 30,
+                backgroundColor: token.colorBgContainer,
+                ...styleOverrides?.footer,
+              }}
             >
               {table.getFooterGroups().map((footerGroup) => {
                 return (
@@ -545,11 +580,15 @@ export const InternalTable = <T,>({
                       return (
                         <ShadcnTableCell
                           key={header.id}
+                          colSpan={header.colSpan}
                           className="border-t font-semibold"
                           style={{
-                            position: "sticky",
-                            bottom: 0,
-                            backgroundColor: token.colorBgContainer,
+                            ...getCommonPinningStyles(
+                              header.column,
+                              false,
+                              false,
+                              token,
+                            ),
                             textAlign: footerAlign || undefined,
                           }}
                         >
@@ -568,25 +607,6 @@ export const InternalTable = <T,>({
             </ShadcnTableFooter>
           )}
 
-          {/* note TABLE LOADING STATE */}
-          {loading &&
-            [...Array(tableLoadingRowCount)]
-              .map((_, index) => ({
-                key: `key${index}`,
-              }))
-              ?.map((item) => {
-                return (
-                  <ShadcnTableRow key={item.key}>
-                    {table?.getAllColumns()?.map((column) => {
-                      return (
-                        <ShadcnTableCell className="p-3" key={column.id}>
-                          <Skeleton active title paragraph={false} />
-                        </ShadcnTableCell>
-                      );
-                    })}
-                  </ShadcnTableRow>
-                );
-              })}
         </ShadcnTable>
       </div>
       {/* note TABLE EMPTY STATE */}
@@ -963,6 +983,7 @@ export const MemoizedCell: React.FC<{
     const nextColumn = nextCell.column;
 
     return (
+      prevCell.row.original === nextCell.row.original &&
       prevCell.getValue() === nextCell.getValue() &&
       prevColumn.getIsPinned() === nextColumn.getIsPinned() &&
       prevColumn.getIsVisible() === nextColumn.getIsVisible() &&
@@ -1352,6 +1373,7 @@ export const EditableRow = memo(
 
     return (
       prevOrderColumns === nextOrderColumns &&
+      prevRow.original === nextRow.original &&
       prevRow.id === nextRow.id &&
       prev.isSelected === next.isSelected &&
       JSON.stringify(prevVisibleColumns) ===
