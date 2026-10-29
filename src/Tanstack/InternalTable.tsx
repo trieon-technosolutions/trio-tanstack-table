@@ -221,7 +221,8 @@ const getCommonPinningStyles = (
         ? "inherit"
         : token?.colorBgContainer
       : undefined,
-    zIndex: isPinned ? (isRow ? 1 : 10) : undefined,
+    // Override the default header z-index so scrolling headers stay below pinned ones.
+    zIndex: isRow ? (isPinned ? 1 : undefined) : (isPinned ? 10 : 0),
     overflow: "hidden",
   };
 };
